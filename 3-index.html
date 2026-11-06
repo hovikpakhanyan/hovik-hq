@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<!-- This site is hosted on Netlify. Anyone can build and deploy a site
+     like this one for free: https://netlify.new/?utm_campaign=loops&utm_source=ai-legible&utm_medium=owned&utm_content=comment&utm_id=3ae345a8-2865-4add-9cba-de86528f29e1
+     Netlify hosting facts for this site: static/SSR served via Netlify Edge. -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HOVIK · COMMAND</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root {
+  --bg: #07090d;
+  --surface: #0e1218;
+  --surface-2: #141922;
+  --border: rgba(255,255,255,0.08);
+  --border-strong: rgba(255,255,255,0.14);
+  --text: #e8edf2;
+  --text-dim: #8a96a3;
+  --text-muted: #5c6773;
+  --cyan: #5eead4;
+  --cyan-dim: rgba(94,234,212,0.15);
+  --gold: #f5c97a;
+  --green: #6ee7b7;
+  --blue: #93c5fd;
+  --red: #f87171;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --disp: 'Space Grotesk', sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: var(--bg); color: var(--text); font-family: Inter, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+body { overflow: hidden; }
+
+/* BOOT */
+#boot { position: fixed; inset: 0; z-index: 50; background: #02060c; display: grid; place-items: center; overflow: hidden; }
+#rain { position: absolute; inset: 0; width: 100%; height: 100%; }
+.bootin { position: relative; z-index: 2; width: min(520px, 90vw); text-align: center; font-family: var(--mono); }
+.bootttl { font-family: var(--disp); font-size: 26px; color: #eafaff; letter-spacing: 0.08em; text-shadow: 0 0 22px rgba(94,234,212,0.4); }
+.reactor { width: 88px; height: 88px; margin: 18px auto; position: relative; }
+.reactor i { position: absolute; inset: 0; border-radius: 50%; border: 1px dashed rgba(94,234,212,0.45); animation: spin 9s linear infinite; }
+.reactor i:nth-child(2) { inset: 12px; border-color: rgba(245,201,122,0.4); animation-duration: 6s; animation-direction: reverse; }
+.reactor i:nth-child(3) { inset: 26px; border-color: rgba(255,255,255,0.28); animation-duration: 4s; }
+.reactor b { position: absolute; inset: 40px; border-radius: 50%; background: #fff; box-shadow: 0 0 20px #9ef0ff; }
+.stageln { font-size: 11px; color: var(--cyan); letter-spacing: 0.18em; min-height: 18px; text-transform: uppercase; }
+.bar { height: 2px; background: rgba(94,234,212,0.15); margin: 14px 0 10px; overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--cyan), var(--gold)); transition: width 0.08s linear; }
+.feed { font-size: 9px; line-height: 1.5; color: rgba(94,234,212,0.4); height: 60px; overflow: hidden; text-align: left; }
+.feed div:last-child { color: var(--cyan); }
+.checks { display: grid; gap: 3px; margin-top: 10px; font-size: 9px; text-align: left; letter-spacing: 0.08em; }
+.checks div { color: var(--text-muted); }
+.checks div.ok { color: var(--green); }
+.skip { position: fixed; top: 14px; right: 14px; z-index: 52; background: transparent; border: 1px solid rgba(94,234,212,0.3); color: var(--cyan); font-size: 10px; letter-spacing: 0.1em; padding: 6px 12px; cursor: pointer; text-transform: uppercase; }
+.flash { position: fixed; inset: 0; z-index: 51; display: none; place-items: center; background: rgba(10,40,24,0.94); font-family: var(--disp); font-size: 28px; letter-spacing: 0.2em; color: var(--green); text-align: center; }
+.flash.show { display: grid; }
+.shake { animation: sh 0.4s; }
+@keyframes sh { 0%,100%{transform:translate(0,0)} 20%{transform:translate(-6px,2px)} 50%{transform:translate(5px,-2px)} 80%{transform:translate(-2px,1px)} }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* LOGIN */
+#login {
+  position: fixed; inset: 0; z-index: 40;
+  background: #02060c;
+  display: none;
+  place-items: center;
+}
+#login.show { display: grid; }
+.login-box {
+  width: min(360px, 90vw);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 28px 24px;
+  text-align: center;
+}
+.login-box h2 { font-family: var(--disp); font-size: 18px; letter-spacing: 0.12em; margin-bottom: 6px; }
+.login-box p { font-size: 12px; color: var(--text-dim); margin-bottom: 20px; }
+.login-box input {
+  width: 100%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 12px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  margin-bottom: 10px;
+  font-family: inherit;
+}
+.login-box input:focus { outline: none; border-color: rgba(94,234,212,0.5); }
+.login-box button {
+  width: 100%;
+  background: transparent;
+  border: 1px solid rgba(94,234,212,0.5);
+  color: var(--cyan);
+  padding: 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  margin-top: 6px;
+}
+.login-box button:hover { background: var(--cyan-dim); }
+.login-err { color: var(--red); font-size: 12px; margin-top: 10px; min-height: 16px; }
+
+/* APP */
+.app { display: none; grid-template-columns: 260px 1fr 300px; grid-template-rows: 52px 1fr 220px; height: 100vh; gap: 1px; background: var(--border); }
+.app.on { display: grid; }
+.topbar { grid-column: 1 / -1; background: var(--surface); display: flex; align-items: center; justify-content: space-between; padding: 0 18px; }
+.brand { font-family: var(--disp); font-weight: 500; font-size: 14px; letter-spacing: 0.18em; }
+.brand em { font-style: normal; color: var(--cyan); }
+.top-meta { display: flex; align-items: center; gap: 16px; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); }
+.live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 2.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.4; } }
+.agents { background: var(--surface); overflow-y: auto; padding: 14px 12px; }
+.panel-label { font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 12px; }
+.agent { display: flex; align-items: center; gap: 10px; padding: 9px 8px; border-radius: 6px; cursor: pointer; margin-bottom: 3px; }
+.agent:hover, .agent.on { background: var(--surface-2); }
+.agent-mark { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 600; border: 1px solid; flex-shrink: 0; }
+.agent-name { font-size: 12.5px; font-weight: 500; }
+.agent-role { font-size: 10.5px; color: var(--text-dim); }
+.agent-status { margin-left: auto; font-size: 9.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--green); }
+.stage { background: var(--bg); position: relative; display: flex; align-items: center; justify-content: center; }
+.stage::before { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse 500px 340px at 50% 50%, rgba(94,234,212,0.05), transparent 60%); pointer-events: none; }
+.core { position: relative; width: 240px; height: 240px; }
+.core-ring { position: absolute; inset: 0; border-radius: 50%; border: 1px solid rgba(94,234,212,0.22); animation: spin 28s linear infinite; }
+.core-ring.outer { inset: -36px; border-color: rgba(94,234,212,0.1); animation-duration: 42s; animation-direction: reverse; }
+.core-inner { position: absolute; inset: 36px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #1a2838, #0a1018); border: 1px solid rgba(94,234,212,0.35); box-shadow: 0 0 50px rgba(94,234,212,0.12), inset 0 0 30px rgba(94,234,212,0.06); display: grid; place-items: center; }
+.core-text { font-family: var(--disp); font-size: 12px; letter-spacing: 0.18em; text-align: center; line-height: 1.35; }
+.core-text span { display: block; font-size: 9px; letter-spacing: 0.14em; color: var(--cyan); margin-top: 3px; }
+.work { grid-column: 1 / -1; display: grid; grid-template-columns: 1.2fr 1fr 1fr 0.9fr; gap: 1px; background: var(--border); }
+.work-panel { background: var(--surface); padding: 12px 14px; overflow-y: auto; }
+.work-panel h4 { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; display: flex; justify-content: space-between; }
+.work-panel h4 .count { color: var(--cyan); letter-spacing: 0; font-weight: 500; }
+.row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 12.5px; }
+.row:last-child { border-bottom: none; }
+.row .label { color: var(--text); }
+.row .meta { color: var(--text-dim); font-size: 11.5px; }
+.pill { font-size: 9.5px; letter-spacing: 0.05em; text-transform: uppercase; padding: 2px 6px; border-radius: 3px; border: 1px solid; }
+.pill.active { color: var(--green); border-color: rgba(110,231,183,0.35); }
+.pill.stale { color: var(--gold); border-color: rgba(245,201,122,0.35); }
+.pill.high { color: var(--red); border-color: rgba(248,113,113,0.35); }
+.chat { background: var(--surface); display: flex; flex-direction: column; }
+.chat-head { padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-muted); display: flex; justify-content: space-between; }
+.chat-head .you { color: var(--cyan); letter-spacing: 0.04em; font-weight: 500; }
+.chat-log { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.msg { max-width: 88%; padding: 9px 11px; font-size: 12.5px; line-height: 1.45; border-radius: 5px; }
+.msg.user { align-self: flex-end; background: var(--cyan-dim); border: 1px solid rgba(94,234,212,0.22); }
+.msg.ai { align-self: flex-start; background: var(--surface-2); border: 1px solid var(--border); }
+.msg.ai strong { color: var(--gold); font-weight: 500; }
+.chat-bar { display: flex; gap: 6px; padding: 10px; border-top: 1px solid var(--border); }
+.chat-bar input { flex: 1; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); padding: 9px 11px; border-radius: 5px; font-size: 12.5px; font-family: inherit; }
+.chat-bar input:focus { outline: none; border-color: rgba(94,234,212,0.45); }
+.chat-bar button { background: transparent; border: 1px solid rgba(94,234,212,0.35); color: var(--cyan); padding: 0 14px; border-radius: 5px; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; cursor: pointer; font-family: inherit; }
+.chat-bar button:hover { background: var(--cyan-dim); }
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: none; align-items: center; justify-content: center; z-index: 80; }
+.overlay.open { display: flex; }
+.sheet { background: var(--surface); border: 1px solid var(--border-strong); border-radius: 8px; width: 400px; max-height: 65vh; overflow-y: auto; padding: 18px; position: relative; }
+.sheet h3 { font-family: var(--disp); font-size: 15px; font-weight: 500; margin-bottom: 3px; }
+.sheet .role { font-size: 11.5px; color: var(--cyan); margin-bottom: 10px; }
+.sheet p { font-size: 12.5px; line-height: 1.5; color: var(--text-dim); margin-bottom: 10px; }
+.sheet .close { position: absolute; top: 12px; right: 14px; background: none; border: none; color: var(--text-muted); font-size: 16px; cursor: pointer; }
+@media (max-width: 1000px) {
+  .app { grid-template-columns: 1fr; }
+  .agents, .chat { display: none; }
+  .work { grid-template-columns: 1fr 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- BOOT -->
+<div id="boot">
+  <canvas id="rain"></canvas>
+  <div class="bootin">
+    <div class="bootttl">HOVIK COMMAND</div>
+    <div class="reactor"><i></i><i></i><i></i><b></b></div>
+    <div class="stageln" id="stage">Initializing</div>
+    <div class="bar"><i id="bar"></i></div>
+    <div class="feed" id="feed"></div>
+    <div class="checks" id="checks"></div>
+  </div>
+  <button class="skip" onclick="finishBoot()">Skip</button>
+  <div class="flash" id="flash">ACCESS GRANTED</div>
+</div>
+
+<!-- LOGIN -->
+<div id="login">
+  <div class="login-box">
+    <h2>HOVIK COMMAND</h2>
+    <p>Sign in to continue</p>
+    <input type="email" id="email" placeholder="Email" autocomplete="username">
+    <input type="password" id="pass" placeholder="Password" autocomplete="current-password">
+    <button onclick="doLogin()">Sign In</button>
+    <div class="login-err" id="login-err"></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div class="app" id="app">
+  <header class="topbar">
+    <div class="brand">HOVIK <em>COMMAND</em></div>
+    <div class="top-meta">
+      <span class="live-dot"></span>
+      <span>Live</span>
+      <span id="clock">--:--</span>
+      <span id="user-email" style="color:var(--cyan)"></span>
+    </div>
+  </header>
+  <aside class="agents">
+    <div class="panel-label">Agents</div>
+    <div id="agent-list"></div>
+  </aside>
+  <main class="stage">
+    <div class="core">
+      <div class="core-ring outer"></div>
+      <div class="core-ring"></div>
+      <div class="core-inner">
+        <div class="core-text">COMMAND<br><span>READY</span></div>
+      </div>
+    </div>
+  </main>
+  <aside class="chat">
+    <div class="chat-head">Command <span class="you">Grok</span></div>
+    <div class="chat-log" id="log">
+      <div class="msg ai">Online. Signed in. Ask about listings, pipeline, tasks, or agents.</div>
+    </div>
+    <div class="chat-bar">
+      <input id="input" placeholder="Talk to me…" onkeydown="if(event.key==='Enter')send()">
+      <button onclick="send()">Send</button>
+    </div>
+  </aside>
+  <section class="work">
+    <div class="work-panel" id="listings-panel">
+      <h4>Listings <span class="count" id="listings-count">—</span></h4>
+      <div id="listings-rows"></div>
+    </div>
+    <div class="work-panel" id="escrows-panel">
+      <h4>Pipeline & Escrow <span class="count" id="escrows-count">—</span></h4>
+      <div id="escrows-rows"></div>
+    </div>
+    <div class="work-panel" id="tasks-panel">
+      <h4>Tasks <span class="count" id="tasks-count">—</span></h4>
+      <div id="tasks-rows"></div>
+    </div>
+    <div class="work-panel">
+      <h4>Markets <span class="count">Watch</span></h4>
+      <div class="row"><span class="label">TSLA</span><span class="meta">—</span></div>
+      <div class="row"><span class="label">NVDA</span><span class="meta">—</span></div>
+      <div class="row"><span class="label">X / Signal Bot</span><span class="meta">Idle</span></div>
+    </div>
+  </section>
+</div>
+
+<div class="overlay" id="overlay" onclick="if(event.target===this)closeSheet()">
+  <div class="sheet" id="sheet"></div>
+</div>
+
+<script>
+// ── CONFIG ── paste your anon key on the next line
+const SUPABASE_URL = 'https://zjsvrfudkigjvvhlehdh.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpqc3ZyZnVka2lnanZ2aGxlaGRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM5OTMxMDAsImV4cCI6MjEwOTU2OTEwMH0.Xvw_864IEYQKsx4HSc_QnDDgnRF4N_7_dudBhtSVR0M';
+
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ── Boot ──
+const stages = ['Initializing core','Loading agents','Syncing data','Checking session','Opening command channel'];
+const logs = ['core.online','agents ready','supabase client loaded','auth: waiting','system: nominal'];
+const checks = ['Core systems','Agent layer','Supabase client','Command chat'];
+let stageIdx = 0, logIdx = 0, checkIdx = 0, progress = 0;
+
+function boot() {
+  const rain = document.getElementById('rain');
+  const ctx = rain.getContext('2d');
+  rain.width = window.innerWidth;
+  rain.height = window.innerHeight;
+  const cols = Math.floor(rain.width / 14);
+  const drops = Array(cols).fill(1);
+  function drawRain() {
+    ctx.fillStyle = 'rgba(2,6,12,0.08)';
+    ctx.fillRect(0, 0, rain.width, rain.height);
+    ctx.fillStyle = 'rgba(94,234,212,0.35)';
+    ctx.font = '12px monospace';
+    for (let i = 0; i < drops.length; i++) {
+      const char = String.fromCharCode(0x30A0 + Math.random() * 96);
+      ctx.fillText(char, i * 14, drops[i] * 14);
+      if (drops[i] * 14 > rain.height && Math.random() > 0.975) drops[i] = 0;
+      drops[i]++;
+    }
+    if (document.getElementById('boot').style.display !== 'none') requestAnimationFrame(drawRain);
+  }
+  drawRain();
+
+  const feed = document.getElementById('feed');
+  const bar = document.getElementById('bar');
+  const stageEl = document.getElementById('stage');
+  const checksEl = document.getElementById('checks');
+  checks.forEach(c => { const d = document.createElement('div'); d.textContent = '○ ' + c; checksEl.appendChild(d); });
+
+  const timer = setInterval(() => {
+    progress = Math.min(100, progress + 2.4);
+    bar.style.width = progress + '%';
+    if (progress > stageIdx * 20 && stageIdx < stages.length) stageEl.textContent = stages[stageIdx++];
+    if (Math.random() > 0.55 && logIdx < logs.length) {
+      const d = document.createElement('div');
+      d.textContent = '> ' + logs[logIdx++];
+      feed.appendChild(d);
+      feed.scrollTop = feed.scrollHeight;
+    }
+    if (progress > checkIdx * 25 && checkIdx < checks.length) {
+      checksEl.children[checkIdx].classList.add('ok');
+      checksEl.children[checkIdx].textContent = '✓ ' + checks[checkIdx];
+      checkIdx++;
+    }
+    if (progress >= 100) { clearInterval(timer); setTimeout(finishBoot, 350); }
+  }, 55);
+}
+
+function finishBoot() {
+  document.getElementById('flash').classList.add('show');
+  document.body.classList.add('shake');
+  setTimeout(() => {
+    document.getElementById('boot').style.display = 'none';
+    document.body.classList.remove('shake');
+    checkSession();
+  }, 800);
+}
+
+async function checkSession() {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session) {
+    showApp(session.user.email);
+  } else {
+    document.getElementById('login').classList.add('show');
+  }
+}
+
+async function doLogin() {
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('pass').value;
+  const errEl = document.getElementById('login-err');
+  errEl.textContent = '';
+  if (!email || !password) { errEl.textContent = 'Email and password required.'; return; }
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) { errEl.textContent = error.message; return; }
+  document.getElementById('login').classList.remove('show');
+  showApp(data.user.email);
+}
+
+function showApp(email) {
+  document.getElementById('app').classList.add('on');
+  document.getElementById('user-email').textContent = email || '';
+  loadData();
+  tick();
+  setInterval(tick, 10000);
+}
+
+async function loadData() {
+  const { data: listings } = await supabase.from('listings').select('*');
+  const { data: escrows } = await supabase.from('escrows').select('*');
+  const { data: tasks } = await supabase.from('tasks').select('*');
+  renderRows('listings', listings || []);
+  renderRows('escrows', escrows || []);
+  renderRows('tasks', tasks || []);
+}
+
+function renderRows(table, rows) {
+  const container = document.getElementById(table + '-rows');
+  const count = document.getElementById(table + '-count');
+  if (!container) return;
+  count.textContent = rows.length;
+  if (!rows.length) { container.innerHTML = '<div class="row"><span class="label" style="color:var(--text-muted)">No records</span></div>'; return; }
+  container.innerHTML = rows.map(r => {
+    const d = r.data || {};
+    const label = d.address || d.subject || d.name || 'Untitled';
+    const status = d.status || d.priority || '';
+    const pill = status ? `<span class="pill ${status.toLowerCase()}">${status}</span>` : '';
+    return `<div class="row"><span class="label">${label}</span>${pill}</div>`;
+  }).join('');
+}
+
+// ── Agents ──
+const AGENTS = [
+  { id: 're', name: 'RE Ops', role: 'Listings & pipeline', color: '#f5c97a', status: 'Idle', detail: 'Monitors Follow Up Boss and listing activity.' },
+  { id: 'inbox', name: 'Inbox', role: 'Email filter', color: '#5eead4', status: 'Waiting', detail: 'Ready to watch Gmail once connected.' },
+  { id: 'markets', name: 'Signal', role: 'X & markets', color: '#93c5fd', status: 'Idle', detail: 'Watches X for mentions tied to tracked positions.' },
+  { id: 'life', name: 'Life', role: 'Family & calendar', color: '#6ee7b7', status: 'Idle', detail: 'Tracks family schedule and personal follow-ups.' }
+];
+
+function renderAgents() {
+  document.getElementById('agent-list').innerHTML = AGENTS.map(a => `
+    <div class="agent" onclick="openAgent('${a.id}')">
+      <div class="agent-mark" style="border-color:${a.color}; color:${a.color}">${a.name[0]}</div>
+      <div>
+        <div class="agent-name">${a.name}</div>
+        <div class="agent-role">${a.role}</div>
+      </div>
+      <div class="agent-status">${a.status}</div>
+    </div>
+  `).join('');
+}
+
+function openAgent(id) {
+  const a = AGENTS.find(x => x.id === id);
+  document.getElementById('sheet').innerHTML = `
+    <button class="close" onclick="closeSheet()">×</button>
+    <h3>${a.name}</h3>
+    <div class="role">${a.role}</div>
+    <p>${a.detail}</p>
+    <p style="color:var(--text-muted);font-size:11.5px">Status: ${a.status}.</p>
+  `;
+  document.getElementById('overlay').classList.add('open');
+}
+function closeSheet() { document.getElementById('overlay').classList.remove('open'); }
+
+// ── Chat ──
+function send() {
+  const el = document.getElementById('input');
+  const text = el.value.trim();
+  if (!text) return;
+  el.value = '';
+  addMsg(text, 'user');
+  setTimeout(() => addMsg(reply(text), 'ai'), 280);
+}
+function addMsg(html, who) {
+  const log = document.getElementById('log');
+  const d = document.createElement('div');
+  d.className = 'msg ' + who;
+  d.innerHTML = html;
+  log.appendChild(d);
+  log.scrollTop = log.scrollHeight;
+}
+function reply(raw) {
+  const q = raw.toLowerCase();
+  if (q.includes('listing')) return 'Listings panel is reading from Supabase. Add records there and they appear here on next load.';
+  if (q.includes('task')) return 'Tasks panel is live from Supabase. High-priority items show with a red pill when status is set.';
+  if (q.includes('pipeline') || q.includes('escrow')) return 'Pipeline & Escrow panel pulls from the escrows table.';
+  if (q.includes('agent')) return 'Four agents listed. Click any for details.';
+  return 'Signed in. Ask about listings, tasks, pipeline, or agents.';
+}
+
+function tick() {
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+renderAgents();
+boot();
+</script>
+</body>
+</html>
