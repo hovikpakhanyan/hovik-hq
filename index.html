@@ -262,7 +262,7 @@ body { overflow: hidden; }
 const SUPABASE_URL = 'https://zjsvrfudkigjvvhlehdh.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpqc3ZyZnVka2lnanZ2aGxlaGRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM5OTMxMDAsImV4cCI6MjEwOTU2OTEwMH0.Xvw_864IEYQKsx4HSc_QnDDgnRF4N_7_dudBhtSVR0M';
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ── Boot ──
 const stages = ['Initializing core','Loading agents','Syncing data','Checking session','Opening command channel'];
@@ -328,7 +328,7 @@ function finishBoot() {
 }
 
 async function checkSession() {
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data: { session } } = await sb.auth.getSession();
   if (session) {
     showApp(session.user.email);
   } else {
@@ -342,7 +342,7 @@ async function doLogin() {
   const errEl = document.getElementById('login-err');
   errEl.textContent = '';
   if (!email || !password) { errEl.textContent = 'Email and password required.'; return; }
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
   if (error) { errEl.textContent = error.message; return; }
   document.getElementById('login').classList.remove('show');
   showApp(data.user.email);
@@ -357,9 +357,9 @@ function showApp(email) {
 }
 
 async function loadData() {
-  const { data: listings } = await supabase.from('listings').select('*');
-  const { data: escrows } = await supabase.from('escrows').select('*');
-  const { data: tasks } = await supabase.from('tasks').select('*');
+  const { data: listings } = await sb.from('listings').select('*');
+  const { data: escrows } = await sb.from('escrows').select('*');
+  const { data: tasks } = await sb.from('tasks').select('*');
   renderRows('listings', listings || []);
   renderRows('escrows', escrows || []);
   renderRows('tasks', tasks || []);
