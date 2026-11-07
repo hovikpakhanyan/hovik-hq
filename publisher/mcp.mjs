@@ -39,7 +39,7 @@ function rpcError(id, code, message) {
 export async function handleMcp({ auth, db, body, authorization }) {
   const header = String(authorization || '');
   const token = header.startsWith('Bearer ') ? header.slice(7) : '';
-  const session = token ? auth.introspect(token) : null;
+  const session = token ? await auth.introspect(token) : null;
   if (!session) {
     return {
       status: 401,

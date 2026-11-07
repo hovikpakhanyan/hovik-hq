@@ -21,7 +21,7 @@ test('rejects caller owner, sql, and price fields', () => {
   assert.equal(httpsOk('https://news.example.com/story'), true);
 });
 
-test('oauth code, refresh rotation, and revoked replay', () => {
+test('oauth code, refresh rotation, and revoked replay', async () => {
   const issuer = createIssuer({
     clientId: 'hq-client',
     redirectUris: ['https://connector.example/callback'],
@@ -29,27 +29,27 @@ test('oauth code, refresh rotation, and revoked replay', () => {
     resource: 'https://publisher.example'
   });
   const challenge = createHash('sha256').update('verifier-value').digest('base64url');
-  const denied = issuer.authorize({ client_id: 'hq-client', redirect_uri: 'https://connector.example/callback', code_challenge: challenge, code_challenge_method: 'S256', scope: 'research.publish', bootstrap: 'nope' });
+  const denied = await issuer.authorize({ client_id: 'hq-client', redirect_uri: 'https://connector.example/callback', code_challenge: challenge, code_challenge_method: 'S256', scope: 'research.publish', bootstrap: 'nope' });
   assert.equal(denied.status, 401);
-  const ok = issuer.authorize({ client_id: 'hq-client', redirect_uri: 'https://connector.example/callback', code_challenge: challenge, code_challenge_method: 'S256', scope: 'research.publish research.status.read', state: 's', bootstrap: 'owner-bootstrap' });
+  const ok = await issuer.authorize({ client_id: 'hq-client', redirect_uri: 'https://connector.example/callback', code_challenge: challenge, code_challenge_method: 'S256', scope: 'research.publish research.status.read', state: 's', bootstrap: 'owner-bootstrap' });
   const code = new URL(ok.redirect).searchParams.get('code');
-  const first = issuer.token({ grant_type: 'authorization_code', client_id: 'hq-client', code, redirect_uri: 'https://connector.example/callback', code_verifier: 'verifier-value' });
+  const first = await issuer.token({ grant_type: 'authorization_code', client_id: 'hq-client', code, redirect_uri: 'https://connector.example/callback', code_verifier: 'verifier-value' });
   assert.ok(first.access_token);
-  const rotated = issuer.token({ grant_type: 'refresh_token', client_id: 'hq-client', refresh_token: first.refresh_token });
+  const rotated = await issuer.token({ grant_type: 'refresh_token', client_id: 'hq-client', refresh_token: first.refresh_token });
   assert.ok(rotated.access_token);
-  const replay = issuer.token({ grant_type: 'refresh_token', client_id: 'hq-client', refresh_token: first.refresh_token });
+  const replay = await issuer.token({ grant_type: 'refresh_token', client_id: 'hq-client', refresh_token: first.refresh_token });
   assert.equal(replay.error, 'invalid_grant');
-  assert.equal(issuer.introspect(rotated.access_token), null);
+  assert.equal(await issuer.introspect(rotated.access_token), null);
 });
 
-test('revoke kills the access token in the same family', () => {
+test('revoke kills the access token in the same family', async () => {
   const issuer = createIssuer({ clientId: 'hq-client', redirectUris: ['https://connector.example/callback'], bootstrapCode: 'owner-bootstrap', resource: 'https://publisher.example' });
   const challenge = createHash('sha256').update('verifier-value').digest('base64url');
-  const ok = issuer.authorize({ client_id: 'hq-client', redirect_uri: 'https://connector.example/callback', code_challenge: challenge, code_challenge_method: 'S256', scope: 'research.publish', bootstrap: 'owner-bootstrap' });
+  const ok = await issuer.authorize({ client_id: 'hq-client', redirect_uri: 'https://connector.example/callback', code_challenge: challenge, code_challenge_method: 'S256', scope: 'research.publish', bootstrap: 'owner-bootstrap' });
   const code = new URL(ok.redirect).searchParams.get('code');
-  const issued = issuer.token({ grant_type: 'authorization_code', client_id: 'hq-client', code, redirect_uri: 'https://connector.example/callback', code_verifier: 'verifier-value' });
-  issuer.revoke(issued.refresh_token);
-  assert.equal(issuer.introspect(issued.access_token), null);
+  const issued = await issuer.token({ grant_type: 'authorization_code', client_id: 'hq-client', code, redirect_uri: 'https://connector.example/callback', code_verifier: 'verifier-value' });
+  await issuer.revoke(issued.refresh_token);
+  assert.equal(await issuer.introspect(issued.access_token), null);
 });
 
 test('bootstrap is not accepted from a query string and bodies are bounded', async () => {

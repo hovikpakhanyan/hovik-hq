@@ -9,14 +9,29 @@ This file is the checklist. Nothing in the pull request applies it.
 - `origin/main` is a single `index.html`. Supabase project ref in that file is `zjsvrfudkigjvvhlehdh`.
 - Existing `listings`, `escrows`, `tasks`, and `notes` grants are untouched. They were reported to include `TRUNCATE`. Do not “clean those up” in this migration.
 
-## Still blocked — do not host this publisher yet
+## Recommended host
 
-- Bootstrap is accepted only in a POST body. A GET query is rejected and is not a login.
-- Revoking a refresh or access token revokes that token family, including access tokens still in this process.
-- Request bodies over 256 KiB are refused.
-- Tokens live in process memory. A restart forgets them, which fails closed for that process, and a second instance would not see a revocation. Do not run more than one instance, and do not claim hosting, until a private token table is added and reviewed. `publisher/package.json` names `pg` for the database call; it is not installed in this repo and no service is deployed.
-- The migration aborts if `hq_private` or the research tables already exist. It does not drop them. It is not applied to production.
-- Publish takes a transaction advisory lock so two overlapping runs cannot both pass the stale and rate checks.
+Use a Netlify Function on the existing HQ site. Netlify’s documented JavaScript functions take a web `Request` and return a `Response`, and `path` may be a list. The site already has HTTPS. No new host.
+
+Do not use a Supabase Edge Function for this publisher. Those functions run on Deno. The documented database client is `supabase-js`, and its admin client bypasses row security with the service-role key. This publisher must use the `hq_publisher` database role only.
+
+The function is `netlify/functions/publisher.mjs`. It stays unconfigured, and answers 503, until the environment variables below exist. It does not use the service-role key.
+
+## One setup the owner must do
+
+In the Netlify UI for this site, set these runtime environment variables. Do not put the values in git, docs, or logs.
+
+- `HQ_PUBLISHER_DATABASE_URL` — Postgres URL for role `hq_publisher` after that role has a password set on the Supabase database. Not the service-role key.
+- `HQ_RESOURCE_URL` — `https://hq.hovikp.com`
+- `HQ_OAUTH_CLIENT_ID` — a public client id you choose
+- `HQ_OAUTH_REDIRECT_URIS` — the exact redirect URI shown when the Grok connector is added
+- `HQ_OWNER_BOOTSTRAP_CODE` — a long random string. The connector sends it in a POST body, never in a URL.
+
+Also apply `supabase/migrations/20261107143000_oauth_token_store.sql` after the research migration. It stores token hashes in `hq_private` and is not applied by this pull request.
+
+Codes and refresh tokens are one-use. Reuse revokes the family in the database, so a second instance and a restart see the revocation. Publish still uses the transaction lock from the research migration.
+
+This does not connect the stock bot. A live update still needs the function deployed with those variables, the connector OAuth flow completed, and one publish/readback test. None of that has been done.
 
 ## What is not activated
 
