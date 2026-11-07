@@ -1,6 +1,6 @@
 (function (root) {
   var state = 'idle';
-  var reason = 'Rings move on their own. The microphone is off. This is not a voice assistant and nothing is recorded.';
+  var reason = 'Tap the core to listen on this device. Nothing is recorded, and this is not a live assistant.';
   var stream = null;
   var audioCtx = null;
   var micSerial = 0;
@@ -18,14 +18,22 @@
     var core = document.getElementById('command-core');
     var label = document.getElementById('presence-state');
     var noteEl = document.getElementById('presence-note');
-    var btn = document.getElementById('presence-mic');
     if (core) core.setAttribute('data-presence', state);
-    if (label) label.textContent = state === 'listening' ? 'Listening locally'
-      : state === 'speaking' ? 'Local message'
-      : state === 'disconnected' ? 'Microphone off'
-      : 'Idle';
+    var words = {
+      listening: 'Listening locally',
+      speaking: 'Local message',
+      pending: 'Waiting',
+      denied: 'Denied',
+      error: 'Error',
+      disconnected: 'Microphone off',
+      idle: 'Idle'
+    };
+    if (label) label.textContent = words[state] || 'Idle';
     if (noteEl) noteEl.textContent = reason;
-    if (btn) btn.textContent = stream ? 'Stop microphone' : 'Use microphone';
+    if (core) {
+      core.setAttribute('aria-pressed', state === 'listening' || state === 'pending' ? 'true' : 'false');
+      core.setAttribute('aria-label', 'Command core. ' + reason);
+    }
   }
 
   function stopTracks(media) {
@@ -72,10 +80,11 @@
 
   function paintField(ctx, w, h, time, level) {
     ctx.clearRect(0, 0, w, h);
-    var cx = w / 2, cy = h / 2, R = Math.min(w, h) * 0.46;
-    var wash = ctx.createRadialGradient(cx, cy, R * 0.05, cx, cy, R);
-    wash.addColorStop(0, 'rgba(190, 255, 244, 0.55)');
-    wash.addColorStop(0.18, 'rgba(94, 234, 212, 0.18)');
+    var cx = w / 2, cy = h / 2, R = Math.min(w, h) * 0.47;
+    var wash = ctx.createRadialGradient(cx, cy, R * 0.02, cx, cy, R);
+    wash.addColorStop(0, 'rgba(236, 255, 252, 0.95)');
+    wash.addColorStop(0.08, 'rgba(94, 234, 212, 0.45)');
+    wash.addColorStop(0.22, 'rgba(20, 70, 78, 0.18)');
     wash.addColorStop(1, 'rgba(94, 234, 212, 0)');
     ctx.fillStyle = wash;
     ctx.beginPath();
@@ -83,32 +92,48 @@
     ctx.fill();
     ctx.save();
     ctx.translate(cx, cy);
-    ctx.rotate(time * 0.15);
-    ctx.strokeStyle = 'rgba(245, 201, 122, 0.35)';
-    ctx.lineWidth = 1;
-    for (var s = 0; s < 12; s++) {
-      ctx.rotate(Math.PI / 6);
+    ctx.rotate(time * 0.08);
+    for (var t = 0; t < 96; t++) {
+      var major = t % 8 === 0;
+      ctx.rotate((Math.PI * 2) / 96);
+      ctx.strokeStyle = major ? 'rgba(245, 201, 122, 0.72)' : 'rgba(94, 234, 212, 0.32)';
+      ctx.lineWidth = major ? 1.4 : 0.6;
       ctx.beginPath();
-      ctx.moveTo(R * 0.16, 0);
-      ctx.lineTo(R * 0.92, 0);
+      ctx.moveTo(R * (major ? 0.78 : 0.86), 0);
+      ctx.lineTo(R * 0.96, 0);
+      ctx.stroke();
+    }
+    ctx.restore();
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(-time * 0.22);
+    ctx.strokeStyle = 'rgba(158, 240, 255, 0.28)';
+    ctx.lineWidth = 1;
+    for (var s = 0; s < 18; s++) {
+      ctx.rotate(Math.PI / 9);
+      ctx.beginPath();
+      ctx.moveTo(R * 0.2, 0);
+      ctx.lineTo(R * 0.7, 0);
       ctx.stroke();
     }
     ctx.restore();
     var arcs = [
-      { r: 0.9, span: 1.4, speed: 0.7, color: 'rgba(94,234,212,0.9)', width: 2.2 },
-      { r: 0.72, span: 2.1, speed: -0.45, color: 'rgba(158, 240, 255, 0.75)', width: 3 },
-      { r: 0.54, span: 0.9, speed: 1.1, color: 'rgba(245,201,122,0.8)', width: 1.6 }
+      { r: 0.96, span: 0.55, speed: 0.85, color: 'rgba(94,234,212,0.95)', width: 2.4, gap: 0.9 },
+      { r: 0.86, span: 1.15, speed: -0.55, color: 'rgba(210,255,250,0.8)', width: 1.5, gap: 1.35 },
+      { r: 0.74, span: 0.42, speed: 1.25, color: 'rgba(245,201,122,0.9)', width: 2, gap: 0.72 },
+      { r: 0.63, span: 1.8, speed: -0.95, color: 'rgba(94,234,212,0.7)', width: 3.2, gap: 2.2 },
+      { r: 0.5, span: 0.7, speed: 1.6, color: 'rgba(255,255,255,0.75)', width: 1.2, gap: 1.05 }
     ];
     arcs.forEach(function (arc, n) {
       ctx.strokeStyle = arc.color;
       ctx.lineWidth = arc.width;
-      ctx.beginPath();
-      var a0 = time * arc.speed + n;
-      ctx.arc(cx, cy, R * arc.r, a0, a0 + arc.span);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(cx, cy, R * arc.r, a0 + 2.4, a0 + 2.4 + arc.span * 0.65);
-      ctx.stroke();
+      var a0 = time * arc.speed + n * 0.4;
+      for (var k = 0; k < 3; k++) {
+        ctx.beginPath();
+        var start = a0 + k * (arc.span + arc.gap);
+        ctx.arc(cx, cy, R * arc.r, start, start + arc.span);
+        ctx.stroke();
+      }
     });
     var amp = 6 + level * R * 0.22 + Math.sin(time * 2.2) * 4;
     ctx.beginPath();
@@ -191,6 +216,7 @@
     var ticket = ++micSerial;
     micOwner = ticket;
     micPending = true;
+    setState('pending', 'Waiting for microphone permission on this device. Nothing is recorded yet.');
     var acquired = null;
     var ctx = null;
     try {
@@ -242,10 +268,9 @@
       micPending = false;
       micOwner = 0;
       var name = err && err.name;
-      var msg = name === 'NotAllowedError' ? 'Microphone permission was denied. Nothing was recorded.'
-        : name === 'NotFoundError' ? 'No microphone was found.'
-        : 'Microphone could not start. Nothing was recorded or sent.';
-      setState('disconnected', msg);
+      if (name === 'NotAllowedError') setState('denied', 'Microphone permission was denied. Nothing was recorded.');
+      else if (name === 'NotFoundError') setState('error', 'No microphone was found. Nothing was recorded.');
+      else setState('error', 'Microphone could not start. Nothing was recorded or sent.');
     }
   }
 
@@ -284,8 +309,8 @@
         check();
       }).catch(function () {});
     }
-    var btn = document.getElementById('presence-mic');
-    if (btn) btn.addEventListener('click', toggleMic);
+    var coreBtn = document.getElementById('command-core');
+    if (coreBtn) coreBtn.addEventListener('click', toggleMic);
     setState('idle');
     startField();
   }

@@ -124,7 +124,8 @@ body { overflow: hidden; }
 .agent-status { margin-left: auto; font-size: 9.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--green); }
 .stage { background: var(--bg); position: relative; display: flex; align-items: center; justify-content: center; }
 .stage::before { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse 500px 340px at 50% 50%, rgba(94,234,212,0.05), transparent 60%); pointer-events: none; }
-.core { position: relative; width: min(460px, 54vh); height: min(460px, 54vh); z-index: 1; }
+.core { position: relative; width: min(460px, 54vh); height: min(460px, 54vh); z-index: 1; border: 0; padding: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.core:focus-visible { outline: 2px solid var(--cyan); outline-offset: 8px; }
 .core-field { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .core-wave { display: none; }
 .core-ring { display: none; }
@@ -305,30 +306,25 @@ body { overflow: hidden; }
       <button type="button" class="orbit" data-module="tasks">Tasks</button>
       <button type="button" class="orbit" data-module="markets">Markets</button>
       </div>
-      <div class="core" id="command-core" data-presence="idle">
+      <button type="button" class="core" id="command-core" data-presence="idle" aria-pressed="false" aria-label="Command core. Activate to use this device microphone. Nothing is recorded.">
         <canvas id="core-field" class="core-field" width="320" height="320" aria-hidden="true"></canvas>
-        <div class="core-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
-        <div class="core-ring outer"></div>
-        <div class="core-ring mid"></div>
-        <div class="core-ring"></div>
         <div class="core-inner">
           <div class="core-text">COMMAND<br><span>READY</span></div>
         </div>
-      </div>
+      </button>
       <div class="presence">
         <div id="presence-state">Idle</div>
-        <button type="button" id="presence-mic">Use microphone</button>
-        <p id="presence-note">Rings move on their own. The microphone is off. This is not a voice assistant and nothing is recorded.</p>
+        <p id="presence-note">Tap the core to listen on this device. Nothing is recorded.</p>
       </div>
     </div>
   </main>
   <aside class="chat">
-    <div class="chat-head">Command <span class="you">Grok</span></div>
+    <div class="chat-head">Local notes <span class="you">Not connected</span></div>
     <div class="chat-log" id="log">
-      <div class="msg ai">Online. Signed in. Ask about listings, pipeline, tasks, or agents.</div>
+      <div class="msg ai">Grok Bot is not connected. Replies here are saved shortcuts on this page, not a live assistant.</div>
     </div>
     <div class="chat-bar">
-      <input id="input" placeholder="Talk to me…" onkeydown="if(event.key==='Enter')send()">
+      <input id="input" placeholder="Local shortcut…" onkeydown="if(event.key==='Enter')send()">
       <button onclick="send()">Send</button>
     </div>
   </aside>
@@ -637,12 +633,13 @@ function addMsg(html, who) {
 }
 function reply(raw) {
   const q = raw.toLowerCase();
-  if (q.includes('listing')) return 'Listings panel is reading from Supabase. Add records there and they appear here on next load.';
-  if (q.includes('task')) return 'Tasks panel is live from Supabase. High-priority items show with a red pill when status is set.';
-  if (q.includes('pipeline') || q.includes('escrow')) return 'Pipeline & Escrow panel pulls from the escrows table.';
-  if (q.includes('agent')) return 'Four agents listed. Click any for details.';
-  if (q.includes('market') || q.includes('stock') || q.includes('research')) return 'Markets shows published notes only. No live prices and no orders.';
-  return 'Signed in. Ask about listings, tasks, pipeline, or agents.';
+  const local = 'Local shortcut, not Grok Bot. ';
+  if (q.includes('listing')) return local + 'The listings panel reads Supabase after sign-in.';
+  if (q.includes('task')) return local + 'The tasks panel reads Supabase. A red pill marks high priority when that status is stored.';
+  if (q.includes('pipeline') || q.includes('escrow')) return local + 'Pipeline and escrow read the escrows table.';
+  if (q.includes('agent')) return local + 'Four agents are listed. Open one for its note.';
+  if (q.includes('market') || q.includes('stock') || q.includes('research')) return local + 'Markets shows published notes only. No live prices and no orders.';
+  return local + 'Grok Bot is not connected from this page.';
 }
 
 let researchState = { configured: false, holdings: [], watch: [], candidates: [], findings: [] };
