@@ -9,6 +9,15 @@ This file is the checklist. Nothing in the pull request applies it.
 - `origin/main` is a single `index.html`. Supabase project ref in that file is `zjsvrfudkigjvvhlehdh`.
 - Existing `listings`, `escrows`, `tasks`, and `notes` grants are untouched. They were reported to include `TRUNCATE`. Do not “clean those up” in this migration.
 
+## Still blocked — do not host this publisher yet
+
+- Bootstrap is accepted only in a POST body. A GET query is rejected and is not a login.
+- Revoking a refresh or access token revokes that token family, including access tokens still in this process.
+- Request bodies over 256 KiB are refused.
+- Tokens live in process memory. A restart forgets them, which fails closed for that process, and a second instance would not see a revocation. Do not run more than one instance, and do not claim hosting, until a private token table is added and reviewed. `publisher/package.json` names `pg` for the database call; it is not installed in this repo and no service is deployed.
+- The migration aborts if `hq_private` or the research tables already exist. It does not drop them. It is not applied to production.
+- Publish takes a transaction advisory lock so two overlapping runs cannot both pass the stale and rate checks.
+
 ## What is not activated
 
 - No migration has been applied.

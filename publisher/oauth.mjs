@@ -123,20 +123,26 @@ export function createIssuer(options) {
     };
   }
 
+  function killFamily(familyId) {
+    const family = families.get(familyId);
+    if (family) family.revoked = true;
+    for (const [tok, info] of access) if (info.family === familyId) access.delete(tok);
+    for (const [tok, info] of refresh) if (info.family === familyId) refresh.delete(tok);
+  }
+
   function introspect(token) {
     const row = access.get(token);
     if (!row || row.exp < Date.now()) return null;
+    const family = families.get(row.family);
+    if (!family || family.revoked) return null;
     return { active: true, scope: row.scope, aud: resource };
   }
 
   function revoke(token) {
-    access.delete(token);
-    const row = refresh.get(token);
-    if (row) {
-      refresh.delete(token);
-      const family = families.get(row.family);
-      if (family) family.revoked = true;
-    }
+    const accessRow = access.get(token);
+    if (accessRow) killFamily(accessRow.family);
+    const refreshRow = refresh.get(token);
+    if (refreshRow) killFamily(refreshRow.family);
   }
 
   return { metadata, protectedResource, authorize, token, introspect, revoke };

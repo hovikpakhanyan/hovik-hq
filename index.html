@@ -668,13 +668,14 @@ async function loadResearch() {
   const blank = { configured: true, holdings: [], watch: [], candidates: [], findings: [], lastGood: null, attemptFailed: false };
   try {
     const wl = await sb.from('watchlist').select('bucket,symbol,asset_type,sort_order');
-    const runs = await sb.from('ingestion_runs').select('run_id,outcome,researched_at,error_code').order('researched_at', { ascending: false }).limit(8);
-    const missing = [wl.error, runs.error].some(e => e && /does not exist|schema cache|42P01/i.test(e.message || ''));
+    const goodQ = await sb.from('ingestion_runs').select('run_id,researched_at').eq('outcome', 'publish').order('researched_at', { ascending: false }).limit(1);
+    const latestQ = await sb.from('ingestion_runs').select('run_id,outcome,received_at,error_code').order('received_at', { ascending: false }).limit(1);
+    const missing = [wl.error, goodQ.error, latestQ.error].some(e => e && /does not exist|schema cache|42P01/i.test(e.message || ''));
     if (missing) { paintResearch({ configured: false, holdings: [], watch: [], candidates: [], findings: [] }); return; }
     const list = wl.data || [];
     const pick = (bucket) => list.filter(r => r.bucket === bucket).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
-    const good = (runs.data || []).find(r => r.outcome === 'publish');
-    const latest = (runs.data || [])[0];
+    const good = (goodQ.data || [])[0];
+    const latest = (latestQ.data || [])[0];
     let findings = [];
     if (good) {
       const found = await sb.from('research_findings').select('category,horizon,risk,title,summary,thesis,contrary,catalyst,downside,invalidation,symbol,impacted,sources,source_published_at').eq('run_id', good.run_id);

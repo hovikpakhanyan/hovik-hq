@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 import { createIssuer } from './oauth.mjs';
 import { handleMcp } from './mcp.mjs';
+import { authorizeTransport, readBody } from './body.mjs';
 
 const required = ['HQ_RESOURCE_URL', 'HQ_OAUTH_CLIENT_ID', 'HQ_OWNER_BOOTSTRAP_CODE', 'HQ_OAUTH_REDIRECT_URIS', 'HQ_PUBLISHER_DATABASE_URL'];
 const missing = required.filter((key) => !process.env[key]);
@@ -32,13 +33,15 @@ async function dbCall(fn, arg) {
   }
 }
 
-function readBody(req) {
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    req.on('data', (c) => chunks.push(c));
-    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
-    req.on('error', reject);
-  });
+async function takeBody(req, res) {
+  try { return await readBody(req); }
+  catch (err) {
+    if (!res.headersSent) {
+      res.writeHead(err.status || 400, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+      res.end(JSON.stringify({ error: err.status === 413 ? 'oversize' : 'bad_body' }));
+    }
+    return null;
+  }
 }
 
 const server = createServer(async (req, res) => {
@@ -54,7 +57,8 @@ const server = createServer(async (req, res) => {
     return;
   }
   if (req.method === 'POST' && url.pathname === '/oauth/token') {
-    const raw = await readBody(req);
+    const raw = await takeBody(req, res);
+    if (raw == null) return;
     const params = new URLSearchParams(raw);
     const result = issuer.token(Object.fromEntries(params));
     res.writeHead(result.error ? result.status : 200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
@@ -62,22 +66,34 @@ const server = createServer(async (req, res) => {
     return;
   }
   if (req.method === 'POST' && url.pathname === '/oauth/revoke') {
-    const raw = await readBody(req);
+    const raw = await takeBody(req, res);
+    if (raw == null) return;
     const params = new URLSearchParams(raw);
     issuer.revoke(params.get('token') || '');
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end('{}');
     return;
   }
-  if (req.method === 'GET' && url.pathname === '/oauth/authorize') {
+  if (url.pathname === '/oauth/authorize') {
+    const blocked = authorizeTransport(req.method, url.searchParams.has('bootstrap'));
+    if (blocked) {
+      res.writeHead(blocked.status, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+      res.end(JSON.stringify({ error: blocked.error }));
+      return;
+    }
+  }
+  if (req.method === 'POST' && url.pathname === '/oauth/authorize') {
+    const raw = await takeBody(req, res);
+    if (raw == null) return;
+    const params = new URLSearchParams(raw);
     const result = issuer.authorize({
-      client_id: url.searchParams.get('client_id'),
-      redirect_uri: url.searchParams.get('redirect_uri'),
-      code_challenge: url.searchParams.get('code_challenge'),
-      code_challenge_method: url.searchParams.get('code_challenge_method'),
-      scope: url.searchParams.get('scope'),
-      state: url.searchParams.get('state'),
-      bootstrap: url.searchParams.get('bootstrap')
+      client_id: params.get('client_id'),
+      redirect_uri: params.get('redirect_uri'),
+      code_challenge: params.get('code_challenge'),
+      code_challenge_method: params.get('code_challenge_method'),
+      scope: params.get('scope'),
+      state: params.get('state'),
+      bootstrap: params.get('bootstrap')
     });
     if (result.redirect) {
       res.writeHead(302, { location: result.redirect });
@@ -89,7 +105,8 @@ const server = createServer(async (req, res) => {
     return;
   }
   if (req.method === 'POST' && url.pathname === '/mcp') {
-    const raw = await readBody(req);
+    const raw = await takeBody(req, res);
+    if (raw == null) return;
     const out = await handleMcp({
       auth: issuer,
       db: { publish: (p) => dbCall('publish', p), status: (id) => dbCall('status', id) },

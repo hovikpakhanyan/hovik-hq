@@ -8,6 +8,17 @@
 
 create extension if not exists pgcrypto;
 
+-- Abort if a previous or conflicting object is already present. This file does
+-- not drop or rewrite those objects.
+do $$ begin
+  if to_regclass('public.watchlist') is not null
+     or to_regclass('public.research_findings') is not null
+     or to_regclass('public.ingestion_runs') is not null
+     or to_regnamespace('hq_private') is not null then
+    raise exception 'preflight abort: research objects already exist';
+  end if;
+end $$;
+
 do $$ begin
   if not exists (select 1 from pg_roles where rolname = 'anon') then
     create role anon nologin;
@@ -20,19 +31,19 @@ do $$ begin
   end if;
 end $$;
 
-create schema if not exists hq_private;
+create schema hq_private;
 
 revoke all on schema hq_private from public, anon, authenticated;
 grant usage on schema hq_private to hq_publisher;
 
-create table if not exists hq_private.owner_config (
+create table hq_private.owner_config (
   singleton int primary key check (singleton = 1),
   owner_id uuid not null,
   project_ref text not null check (project_ref = 'zjsvrfudkigjvvhlehdh'),
   bound_at timestamptz not null default now()
 );
 
-create table if not exists hq_private.instrument_allowlist (
+create table hq_private.instrument_allowlist (
   symbol text primary key check (symbol ~ '^[A-Z][A-Z0-9.]{0,9}$'),
   asset_type text not null check (asset_type in ('equity', 'etf', 'fund', 'cash', 'other')),
   verification_state text not null check (verification_state in ('verified', 'unverified')),
@@ -43,14 +54,14 @@ create table if not exists hq_private.instrument_allowlist (
   check (publishable = false or verification_state = 'verified')
 );
 
-create table if not exists hq_private.publish_attempts (
+create table hq_private.publish_attempts (
   id bigint generated always as identity primary key,
   owner_id uuid not null,
   run_id uuid,
   at timestamptz not null default now()
 );
 
-create table if not exists public.watchlist (
+create table public.watchlist (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null,
   bucket text not null check (bucket in ('holding', 'watch', 'candidate')),
@@ -63,7 +74,7 @@ create table if not exists public.watchlist (
   unique (owner_id, bucket, symbol)
 );
 
-create table if not exists public.ingestion_runs (
+create table public.ingestion_runs (
   run_id uuid primary key,
   owner_id uuid not null,
   schema_version int not null,
@@ -76,7 +87,7 @@ create table if not exists public.ingestion_runs (
   unique (owner_id, run_id)
 );
 
-create table if not exists public.research_findings (
+create table public.research_findings (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null,
   run_id uuid not null references public.ingestion_runs (run_id),
@@ -100,9 +111,9 @@ create table if not exists public.research_findings (
   unique (owner_id, run_id, finding_key)
 );
 
-create index if not exists watchlist_owner_idx on public.watchlist (owner_id, bucket, sort_order);
-create index if not exists findings_owner_run_idx on public.research_findings (owner_id, run_id);
-create index if not exists runs_owner_time_idx on public.ingestion_runs (owner_id, researched_at desc);
+create index watchlist_owner_idx on public.watchlist (owner_id, bucket, sort_order);
+create index findings_owner_run_idx on public.research_findings (owner_id, run_id);
+create index runs_owner_time_idx on public.ingestion_runs (owner_id, researched_at desc);
 
 alter table public.watchlist enable row level security;
 alter table public.research_findings enable row level security;
@@ -127,9 +138,6 @@ $$;
 revoke all on function hq_private.is_bound_owner() from public, anon;
 grant execute on function hq_private.is_bound_owner() to authenticated;
 
-drop policy if exists owner_select on public.watchlist;
-drop policy if exists owner_select on public.research_findings;
-drop policy if exists owner_select on public.ingestion_runs;
 create policy owner_select on public.watchlist for select to authenticated
   using (owner_id = auth.uid() and hq_private.is_bound_owner());
 create policy owner_select on public.research_findings for select to authenticated
@@ -253,6 +261,7 @@ begin
   if not found then
     return jsonb_build_object('ok', false, 'error_code', 'owner_not_configured');
   end if;
+  perform pg_advisory_xact_lock(hashtext('hq_research_publish'));
 
   bad := hq_private.json_forbidden(payload);
   if bad is not null then

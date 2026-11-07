@@ -3,6 +3,8 @@
   var reason = 'Rings move on their own. The microphone is off. This is not a voice assistant and nothing is recorded.';
   var stream = null;
   var audioCtx = null;
+  var micGeneration = 0;
+  var micPending = false;
   var raf = 0;
   var reduced = false;
   var hiddenPause = false;
@@ -25,15 +27,27 @@
     if (btn) btn.textContent = stream ? 'Stop microphone' : 'Use microphone';
   }
 
+  function stopTracks(media) {
+    if (!media || !media.getTracks) return;
+    media.getTracks().forEach(function (t) { try { t.stop(); } catch (e) {} });
+  }
+  function closeAudio() {
+    if (!audioCtx) return;
+    var ctx = audioCtx;
+    audioCtx = null;
+    ctx.close().catch(function () {});
+  }
+  function signedIn() {
+    var app = document.getElementById('app');
+    return !!(app && app.classList.contains('on'));
+  }
   function release(why) {
-    if (stream) {
-      stream.getTracks().forEach(function (t) { try { t.stop(); } catch (e) {} });
-      stream = null;
-    }
-    if (audioCtx) {
-      audioCtx.close().catch(function () {});
-      audioCtx = null;
-    }
+    micGeneration += 1;
+    micPending = false;
+    stopTracks(stream);
+    stream = null;
+    closeAudio();
+    micLevel = 0;
     var note = why === 'hidden' ? 'Microphone released because this page was hidden. It will not turn back on by itself.'
       : why === 'logout' ? 'Microphone released.'
       : why === 'error' ? 'Microphone stopped after an error. Nothing was recorded or sent.'
@@ -158,22 +172,48 @@
   }
 
   async function toggleMic() {
+    if (micPending) return;
     if (stream) { release('stop'); return; }
+    if (document.hidden || !signedIn()) {
+      setState('disconnected', 'Microphone stays off while this page is hidden or signed out.');
+      return;
+    }
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       setState('disconnected', 'This browser has no microphone API. Nothing was recorded.');
       return;
     }
+    var ticket = micGeneration;
+    micPending = true;
+    var acquired = null;
+    var ctx = null;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true }, video: false });
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      var src = audioCtx.createMediaStreamSource(stream);
-      var analyser = audioCtx.createAnalyser();
+      acquired = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true }, video: false });
+      if (ticket !== micGeneration || document.hidden || !signedIn()) {
+        stopTracks(acquired);
+        micPending = false;
+        return;
+      }
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      var src = ctx.createMediaStreamSource(acquired);
+      var analyser = ctx.createAnalyser();
       analyser.fftSize = 256;
       src.connect(analyser);
+      if (ticket !== micGeneration || document.hidden || !signedIn()) {
+        stopTracks(acquired);
+        ctx.close().catch(function () {});
+        micPending = false;
+        return;
+      }
+      stream = acquired;
+      audioCtx = ctx;
+      micPending = false;
       var data = new Uint8Array(analyser.fftSize);
       setState('listening', 'Level follows this browser microphone only. Nothing is recorded, uploaded, or sent to a voice assistant.');
       (function pump() {
-        if (!stream) return;
+        if (!stream || ticket !== micGeneration || document.hidden || !signedIn()) {
+          if (stream) release('hidden');
+          return;
+        }
         analyser.getByteTimeDomainData(data);
         var sum = 0;
         for (var i = 0; i < data.length; i++) {
@@ -181,13 +221,17 @@
           sum += v * v;
         }
         micLevel = Math.min(1, Math.sqrt(sum / data.length) * 4);
-        if (stream) requestAnimationFrame(pump);
+        requestAnimationFrame(pump);
       })();
-      stream.getTracks().forEach(function (t) {
-        t.addEventListener('ended', function () { release('error'); });
+      acquired.getTracks().forEach(function (t) {
+        t.addEventListener('ended', function () { if (ticket === micGeneration) release('error'); });
       });
     } catch (err) {
-      stream = null;
+      stopTracks(acquired);
+      if (ctx) ctx.close().catch(function () {});
+      if (stream === acquired) stream = null;
+      micPending = false;
+      if (ticket !== micGeneration) return;
       var name = err && err.name;
       var msg = name === 'NotAllowedError' ? 'Microphone permission was denied. Nothing was recorded.'
         : name === 'NotFoundError' ? 'No microphone was found.'
@@ -213,7 +257,7 @@
       hiddenPause = document.hidden;
       if (document.hidden) {
         if (raf) { cancelAnimationFrame(raf); raf = 0; particlesOn = false; }
-        if (stream) release('hidden');
+        release('hidden');
       } else if (!reduced && !batteryPause) {
         particlesOn = true;
         startField();
