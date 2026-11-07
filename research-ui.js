@@ -71,6 +71,12 @@
 
   function renderCard(state) {
     var s = state || {};
+    if (s.authFailed) {
+      return '<div class="row"><span class="label">Research could not be read. The session was rejected.</span></div>';
+    }
+    if (s.readFailed) {
+      return '<div class="row"><span class="label">Research could not be read.</span></div>';
+    }
     if (s.configured === false) {
       return '<div class="row"><span class="label">Research storage is not set up yet.</span></div>' +
         '<div class="row"><span class="meta">No prices and no brokerage link.</span></div>';
@@ -90,7 +96,11 @@
 
   function renderView(state) {
     var s = state || {};
-    var intro = s.configured === false
+    var intro = s.authFailed
+      ? '<p>Research could not be read. The session was rejected. This is not an empty feed.</p>'
+      : s.readFailed
+      ? '<p>Research could not be read.</p>'
+      : s.configured === false
       ? '<p>Research storage is not set up yet. This page is not a quote, a balance, or an order.</p>'
       : '<p>Published notes only. Holdings here are an owner-supplied snapshot, not a live brokerage feed. No prices are shown.</p>';
     if (s.attemptFailed && s.lastGood) {

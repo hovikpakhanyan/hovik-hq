@@ -87,4 +87,7 @@ test('research view escapes text and withholds bad links', () => {
   assert.equal(html.includes('High risk'), true);
   assert.equal(html.includes('Not configured'), true);
   assert.equal(HQResearch.renderCard({ configured: false }).includes('not set up'), true);
+  assert.equal(HQResearch.renderCard({ configured: true, authFailed: true }).includes('session was rejected'), true);
+  assert.equal(HQResearch.renderCard({ configured: true, authFailed: true }).includes('not set up'), false);
+  assert.equal(HQResearch.renderCard({ configured: true, readFailed: true }).includes('could not be read'), true);
 });
