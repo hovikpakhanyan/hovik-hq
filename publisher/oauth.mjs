@@ -1,4 +1,5 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { consentPage } from './consent.mjs';
 
 function b64url(buf) {
   return Buffer.from(buf).toString('base64url');
@@ -25,6 +26,7 @@ export function createMemoryStore() {
   const access = new Map();
   const refresh = new Map();
   const families = new Map();
+  const hits = new Map();
   function kill(familyId) {
     const family = families.get(familyId);
     if (family) family.revoked = true;
@@ -72,7 +74,19 @@ export function createMemoryStore() {
       if (accessRow) kill(accessRow.family);
       const refreshRow = refresh.get(hash);
       if (refreshRow) kill(refreshRow.family);
-    }
+    },
+    async hit(bucket, limit, windowSeconds = 600) {
+      const now = Date.now();
+      const row = hits.get(bucket);
+      if (!row || now - row.start > windowSeconds * 1000) {
+        hits.set(bucket, { start: now, n: 1 });
+        return true;
+      }
+      if (row.n >= limit) return false;
+      row.n += 1;
+      return true;
+    },
+    async purge() {}
   };
 }
 
@@ -84,11 +98,12 @@ export function createIssuer(options) {
   const store = options.store || createMemoryStore();
 
   function metadata() {
+    const origin = String(resource || '').replace(/\/$/, '');
     return {
-      issuer: resource,
-      authorization_endpoint: resource + '/oauth/authorize',
-      token_endpoint: resource + '/oauth/token',
-      revocation_endpoint: resource + '/oauth/revoke',
+      issuer: origin,
+      authorization_endpoint: origin + '/oauth/authorize',
+      token_endpoint: origin + '/oauth/token',
+      revocation_endpoint: origin + '/oauth/revoke',
       response_types_supported: ['code'],
       grant_types_supported: ['authorization_code', 'refresh_token'],
       code_challenge_methods_supported: ['S256'],
@@ -97,23 +112,69 @@ export function createIssuer(options) {
     };
   }
 
+  const limits = {
+    authorize: options.limits?.authorize ?? 20,
+    token: options.limits?.token ?? 60,
+    windowSeconds: options.limits?.windowSeconds ?? 600
+  };
+  const origin = String(resource || '').replace(/\/$/, '');
+
   function protectedResource() {
     return {
-      resource,
-      authorization_servers: [resource],
+      resource: origin + '/mcp',
+      authorization_servers: [origin],
       scopes_supported: ALLOWED_SCOPES,
       bearer_methods_supported: ['header']
     };
   }
 
-  async function authorize(input) {
+  function challenge(error = 'invalid_token', scope = ALLOWED_SCOPES.join(' ')) {
+    return `Bearer error="${error}", resource_metadata="${origin}/.well-known/oauth-protected-resource", scope="${scope}"`;
+  }
+
+  function checkRequest(input) {
     if (!bootstrap) return { error: 'server_unconfigured', status: 503 };
+    if (input.response_type && input.response_type !== 'code') return { error: 'unsupported_response_type', status: 400 };
     if (input.client_id !== clientId) return { error: 'unauthorized_client', status: 400 };
     if (!redirectUris.has(input.redirect_uri)) return { error: 'invalid_redirect', status: 400 };
-    if (input.code_challenge_method !== 'S256' || !input.code_challenge) return { error: 'invalid_request', status: 400 };
-    if (!same(input.bootstrap || '', bootstrap)) return { error: 'access_denied', status: 401 };
+    if (input.code_challenge_method !== 'S256' || !/^[A-Za-z0-9_-]{43,128}$/.test(String(input.code_challenge || ''))) {
+      return { error: 'invalid_request', status: 400 };
+    }
     const requested = String(input.scope || '').split(/\s+/).filter(Boolean);
     if (!requested.length || requested.some((s) => !ALLOWED_SCOPES.includes(s))) return { error: 'invalid_scope', status: 400 };
+    if (input.state && /[\u0000-\u001f\u007f]/.test(String(input.state))) return { error: 'invalid_request', status: 400 };
+    return { ok: true, requested };
+  }
+
+  function consent(input) {
+    const gate = checkRequest(input);
+    if (!gate.ok) return gate;
+    return {
+      html: consentPage({
+        response_type: 'code',
+        client_id: input.client_id,
+        redirect_uri: input.redirect_uri,
+        code_challenge: input.code_challenge,
+        code_challenge_method: 'S256',
+        scope: gate.requested.join(' '),
+        state: input.state || ''
+      })
+    };
+  }
+
+  async function limited(kind, client) {
+    const cap = limits[kind];
+    const specific = await store.hit(kind + ':' + client, cap, limits.windowSeconds);
+    const overall = await store.hit(kind, cap * 2, limits.windowSeconds);
+    return specific && overall;
+  }
+
+  async function authorize(input) {
+    const gate = checkRequest(input);
+    if (!gate.ok) return gate;
+    if (!(await limited('authorize', input.client_id))) return { error: 'rate_limited', status: 429 };
+    if (!same(input.bootstrap || '', bootstrap)) return { error: 'access_denied', status: 401 };
+    const requested = gate.requested;
     const code = b64url(randomBytes(32));
     await store.saveCode({
       hash: hashToken(code),
@@ -153,6 +214,8 @@ export function createIssuer(options) {
 
   async function token(input) {
     if (input.client_id !== clientId) return { error: 'unauthorized_client', status: 400 };
+    if (store.purge) await store.purge();
+    if (!(await limited('token', input.client_id))) return { error: 'rate_limited', status: 429 };
     if (input.grant_type === 'authorization_code') {
       const row = await store.consumeCode(hashToken(input.code || ''));
       if (!row || row.exp < Date.now() || row.redirectUri !== input.redirect_uri) return { error: 'invalid_grant', status: 400 };
@@ -193,5 +256,5 @@ export function createIssuer(options) {
     await store.revoke(hashToken(raw || ''));
   }
 
-  return { metadata, protectedResource, authorize, token, introspect, revoke };
+  return { metadata, protectedResource, challenge, consent, authorize, token, introspect, revoke };
 }

@@ -43,7 +43,10 @@ export async function handleMcp({ auth, db, body, authorization }) {
   if (!session) {
     return {
       status: 401,
-      headers: { 'www-authenticate': 'Bearer error="invalid_token"' },
+      headers: {
+        'www-authenticate': auth.challenge ? auth.challenge('invalid_token') : 'Bearer error="invalid_token"',
+        'cache-control': 'no-store'
+      },
       body: { error: 'invalid_token' }
     };
   }
@@ -66,7 +69,11 @@ export async function handleMcp({ auth, db, body, authorization }) {
     const args = (message.params && message.params.arguments) || {};
     if (name === 'publish_stock_research') {
       if (!session.scope.includes('research.publish')) {
-        return { status: 403, body: rpcError(id, -32001, 'insufficient_scope') };
+        return {
+          status: 403,
+          headers: { 'www-authenticate': auth.challenge('insufficient_scope', 'research.publish'), 'cache-control': 'no-store' },
+          body: rpcError(id, -32001, 'insufficient_scope')
+        };
       }
       const gate = preflight(args);
       if (!gate.ok) return { status: 200, body: rpcResult(id, { isError: true, content: [{ type: 'text', text: JSON.stringify(gate) }] }) };

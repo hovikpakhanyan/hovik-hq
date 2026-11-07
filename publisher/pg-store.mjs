@@ -1,8 +1,9 @@
 import pg from 'pg';
 import { hashToken } from './oauth.mjs';
+import { publisherDbConfig } from './db-config.mjs';
 
-export function createPgStore(connectionString) {
-  const pool = new pg.Pool({ connectionString, max: 4 });
+export function createPgStore(connectionString, options = {}) {
+  const pool = new pg.Pool(publisherDbConfig(connectionString, options));
 
   return {
     async saveCode(row) {
@@ -44,6 +45,20 @@ export function createPgStore(connectionString) {
     },
     async revoke(hash) {
       await pool.query('select hq_private.oauth_revoke($1)', [hash]);
+    },
+    async hit(bucket, limit, windowSeconds) {
+      const { rows } = await pool.query(
+        'select hq_private.oauth_hit($1, $2, $3) as ok',
+        [bucket, limit, windowSeconds]
+      );
+      return rows[0].ok === true;
+    },
+    async purge() {
+      try { await pool.query('select hq_private.oauth_purge_expired()'); }
+      catch { /* retention is best-effort and must not change the client error */ }
+    },
+    async query(sql, params) {
+      return pool.query(sql, params);
     },
     hash: hashToken,
     async end() { await pool.end(); }
