@@ -123,9 +123,25 @@ body { overflow: hidden; }
 .core { position: relative; width: 240px; height: 240px; }
 .core-ring { position: absolute; inset: 0; border-radius: 50%; border: 1px solid rgba(94,234,212,0.22); animation: spin 28s linear infinite; }
 .core-ring.outer { inset: -36px; border-color: rgba(94,234,212,0.1); animation-duration: 42s; animation-direction: reverse; }
-.core-inner { position: absolute; inset: 36px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #1a2838, #0a1018); border: 1px solid rgba(94,234,212,0.35); box-shadow: 0 0 50px rgba(94,234,212,0.12), inset 0 0 30px rgba(94,234,212,0.06); display: grid; place-items: center; }
+.core-inner { position: absolute; inset: 36px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #1a2838, #0a1018); border: 1px solid rgba(94,234,212,0.35); box-shadow: 0 0 50px rgba(94,234,212,0.12), inset 0 0 30px rgba(94,234,212,0.06); display: grid; place-items: center; animation: corePulse 3.5s ease-in-out infinite; }
+@keyframes corePulse {
+  0%, 100% { box-shadow: 0 0 50px rgba(94,234,212,0.12), inset 0 0 30px rgba(94,234,212,0.06); }
+  50% { box-shadow: 0 0 64px rgba(94,234,212,0.38), 0 0 110px rgba(94,234,212,0.16), inset 0 0 40px rgba(94,234,212,0.18); }
+}
+.core.speaking { animation: coreSend 1.2s linear; }
+.core.speaking .core-inner { animation: corePulse 3.5s ease-in-out infinite, coreSendGlow 1.2s linear; }
+@keyframes coreSend {
+  0% { transform: scale(1); }
+  20%, 50% { transform: scale(1.26); }
+  100% { transform: scale(1); }
+}
+@keyframes coreSendGlow {
+  0%, 100% { box-shadow: 0 0 50px rgba(94,234,212,0.12), inset 0 0 30px rgba(94,234,212,0.06); }
+  20%, 50% { box-shadow: 0 0 36px rgba(210,255,250,1), 0 0 96px rgba(94,234,212,0.95), 0 0 170px rgba(94,234,212,0.6), inset 0 0 56px rgba(158,240,255,0.6); }
+}
 .core-text { font-family: var(--disp); font-size: 12px; letter-spacing: 0.18em; text-align: center; line-height: 1.35; }
-.core-text span { display: block; font-size: 9px; letter-spacing: 0.14em; color: var(--cyan); margin-top: 3px; }
+.core-text span { display: block; font-size: 9px; letter-spacing: 0.14em; color: var(--cyan); margin-top: 3px; animation: textGlow 2.8s ease-in-out infinite; }
+@keyframes textGlow { 50% { text-shadow: 0 0 12px rgba(94,234,212,0.8); } }
 .work { grid-column: 1 / -1; display: grid; grid-template-columns: 1.2fr 1fr 1fr 0.9fr; gap: 1px; background: var(--border); }
 .work-panel { background: var(--surface); padding: 12px 14px; overflow-y: auto; }
 .work-panel h4 { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; display: flex; justify-content: space-between; }
@@ -494,12 +510,22 @@ function openAgent(id) {
 function closeSheet() { document.getElementById('overlay').classList.remove('open'); }
 
 // ── Chat ──
+let coreSpeakTimer = 0;
+function reactCore() {
+  const core = document.querySelector('.core');
+  clearTimeout(coreSpeakTimer);
+  core.classList.remove('speaking');
+  void core.offsetWidth;
+  core.classList.add('speaking');
+  coreSpeakTimer = setTimeout(() => core.classList.remove('speaking'), 1200);
+}
 function send() {
   const el = document.getElementById('input');
   const text = el.value.trim();
   if (!text) return;
   el.value = '';
   addMsg(text, 'user');
+  reactCore();
   setTimeout(() => addMsg(reply(text), 'ai'), 280);
 }
 function addMsg(html, who) {
