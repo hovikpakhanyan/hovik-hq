@@ -9,6 +9,10 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
   --bg: #07090d;
   --surface: #0e1218;
   --surface-2: #141922;
@@ -120,16 +124,17 @@ body { overflow: hidden; }
 .agent-status { margin-left: auto; font-size: 9.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--green); }
 .stage { background: var(--bg); position: relative; display: flex; align-items: center; justify-content: center; }
 .stage::before { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse 500px 340px at 50% 50%, rgba(94,234,212,0.05), transparent 60%); pointer-events: none; }
-.core { position: relative; width: 240px; height: 240px; }
-.core-ring { position: absolute; inset: 0; border-radius: 50%; border: 1px solid rgba(94,234,212,0.22); animation: spin 28s linear infinite; }
-.core-ring.outer { inset: -36px; border-color: rgba(94,234,212,0.1); animation-duration: 42s; animation-direction: reverse; }
-.core-inner { position: absolute; inset: 36px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #1a2838, #0a1018); border: 1px solid rgba(94,234,212,0.35); box-shadow: 0 0 50px rgba(94,234,212,0.12), inset 0 0 30px rgba(94,234,212,0.06); display: grid; place-items: center; animation: corePulse 3.5s ease-in-out infinite; }
+.core { position: relative; width: min(460px, 54vh); height: min(460px, 54vh); z-index: 1; }
+.core-field { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.core-wave { display: none; }
+.core-ring { display: none; }
+.core-inner { position: absolute; inset: 0; background: none; border: 0; box-shadow: none; display: grid; place-items: center; pointer-events: none; animation: none; }
 @keyframes corePulse {
   0%, 100% { box-shadow: 0 0 50px rgba(94,234,212,0.12), inset 0 0 30px rgba(94,234,212,0.06); }
   50% { box-shadow: 0 0 64px rgba(94,234,212,0.38), 0 0 110px rgba(94,234,212,0.16), inset 0 0 40px rgba(94,234,212,0.18); }
 }
 .core.speaking { animation: coreSend 1.2s linear; }
-.core.speaking .core-inner { animation: corePulse 3.5s ease-in-out infinite, coreSendGlow 1.2s linear; }
+.core.speaking .core-inner { animation: none; }
 @keyframes coreSend {
   0% { transform: scale(1); }
   20%, 50% { transform: scale(1.26); }
@@ -174,10 +179,57 @@ body { overflow: hidden; }
 .sheet .role { font-size: 11.5px; color: var(--cyan); margin-bottom: 10px; }
 .sheet p { font-size: 12.5px; line-height: 1.5; color: var(--text-dim); margin-bottom: 10px; }
 .sheet .close { position: absolute; top: 12px; right: 14px; background: none; border: none; color: var(--text-muted); font-size: 16px; cursor: pointer; }
+.app { height: 100dvh; grid-template-rows: 52px minmax(0, 1fr) minmax(140px, 220px); }
+.topbar { grid-row: 1; }
+.agents { grid-column: 1; grid-row: 2; min-height: 0; }
+.stage { grid-column: 2; grid-row: 2; min-height: 0; min-width: 0; }
+.chat { grid-column: 3; grid-row: 2; min-height: 0; }
+.work { grid-row: 3; min-height: 0; }
+.constellation { position: relative; width: min(100%, 640px); height: 100%; display: grid; place-items: center; }
+.orbit-row { display: contents; }
+.core { flex: 0 0 auto; }
+.orbit { display: none; }
+.presence { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); width: min(420px, 92%); text-align: center; z-index: 2; }
+.presence button, .orbit { min-height: 44px; }
+#presence-state { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--cyan); }
+#presence-mic, #open-research, #module-back, #research-back { background: transparent; border: 1px solid rgba(94,234,212,0.45); color: var(--cyan); border-radius: 6px; padding: 8px 12px; min-height: 44px; cursor: pointer; font: inherit; }
+#presence-note { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+.module-pop { position: fixed; inset: 0; z-index: 70; background: rgba(2,6,12,0.72); display: flex; align-items: center; justify-content: center; padding: max(12px, var(--safe-top)) max(12px, var(--safe-right)) max(12px, var(--safe-bottom)) max(12px, var(--safe-left)); }
+.module-pop[hidden] { display: none; }
+.module-card { width: min(560px, 100%); max-height: min(78dvh, 640px); overflow: auto; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 16px; padding: 12px; }
+.module-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; position: sticky; top: 0; background: var(--surface); z-index: 1; padding-bottom: 6px; }
+#research-ovl { position: fixed; inset: 0; z-index: 75; background: rgba(2,6,12,0.78); display: none; align-items: center; justify-content: center; padding: 16px; }
+#research-ovl.open { display: flex; }
+.research-card { width: min(760px, 100%); max-height: min(86dvh, 820px); overflow: auto; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 16px; padding: 18px 18px 28px; }
+.research-card h3, .research-sec h4, .finding h5 { font-family: var(--disp); font-weight: 500; }
+.research-empty, .research-card .meta { color: var(--text-dim); font-size: 12px; }
+.finding { border-top: 1px solid var(--border); padding: 8px 0; }
+.finding p, .research-card p { font-size: 13px; line-height: 1.45; color: var(--text-dim); margin: 4px 0; }
+.sources { margin: 6px 0 0 16px; }
 @media (max-width: 1000px) {
-  .app { grid-template-columns: 1fr; }
-  .agents, .chat { display: none; }
-  .work { grid-template-columns: 1fr 1fr; }
+  .app.on { grid-template-columns: 1fr; grid-template-rows: 52px minmax(0, 1fr); height: 100svh; }
+  .stage { grid-column: 1; grid-row: 2; }
+  .agents, .chat, .work { display: none; }
+  .core { width: min(168px, 40vw); height: min(168px, 40vw); }
+  .orbit { display: inline-flex; align-items: center; justify-content: center; position: absolute; min-width: 64px; min-height: 44px; padding: 8px 10px; border-radius: 999px; border: 1px solid rgba(94,234,212,0.45); background: rgba(8,14,20,0.92); color: var(--cyan); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; z-index: 3; }
+  .orbit[data-module="agents"] { top: max(8px, var(--safe-top)); left: max(8px, var(--safe-left)); }
+  .orbit[data-module="chat"] { top: max(8px, var(--safe-top)); right: max(8px, var(--safe-right)); }
+  .orbit[data-module="listings"] { top: 42%; left: max(4px, var(--safe-left)); }
+  .orbit[data-module="escrows"] { top: 42%; right: max(4px, var(--safe-right)); }
+  .orbit[data-module="tasks"] { bottom: max(64px, calc(12px + var(--safe-bottom))); left: max(8px, var(--safe-left)); }
+  .orbit[data-module="markets"] { bottom: max(64px, calc(12px + var(--safe-bottom))); right: max(8px, var(--safe-right)); }
+  #module-host .agents, #module-host .chat, #module-host .work-panel { display: block; max-height: 58dvh; overflow: auto; background: var(--surface); }
+  #module-host .chat { display: flex; flex-direction: column; min-height: 280px; }
+}
+@media (max-width: 1000px) and (max-height: 520px) {
+  .constellation { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; overflow: auto; }
+  .core { width: 112px; height: 112px; }
+  .orbit-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; width: 100%; }
+  .orbit { position: static; }
+  .presence { position: static; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .core-ring, .core-inner, .core-text span, .core.speaking, .live-dot { animation: none !important; }
 }
 
 /* PROPERTY DETAIL MODAL */
@@ -185,7 +237,7 @@ body { overflow: hidden; }
 .row.clickable:hover .label { color: var(--cyan); }
 #detail-ovl { position: fixed; inset: 0; z-index: 80; background: rgba(2,6,12,0.72); backdrop-filter: blur(3px); display: none; align-items: center; justify-content: center; }
 #detail-ovl.open { display: flex; }
-.detail-card { width: min(520px, 92vw); background: var(--surface); border: 1px solid var(--border-strong); border-radius: 10px; padding: 22px 24px; box-shadow: 0 0 40px rgba(94,234,212,0.08); }
+.detail-card { width: min(520px, 92vw); max-height: min(86dvh, 100%); overflow: auto; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 10px; padding: 22px 24px; box-shadow: 0 0 40px rgba(94,234,212,0.08); }
 .detail-card h3 { font-family: var(--disp); font-size: 17px; letter-spacing: 0.04em; color: #eafaff; margin-bottom: 4px; }
 .detail-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
 .detail-close { background: none; border: 1px solid var(--border); color: var(--text-dim); border-radius: 4px; font-size: 11px; padding: 3px 9px; cursor: pointer; font-family: var(--mono); }
@@ -244,11 +296,29 @@ body { overflow: hidden; }
     <div id="agent-list"></div>
   </aside>
   <main class="stage">
-    <div class="core">
-      <div class="core-ring outer"></div>
-      <div class="core-ring"></div>
-      <div class="core-inner">
-        <div class="core-text">COMMAND<br><span>READY</span></div>
+    <div class="constellation" id="constellation">
+      <div class="orbit-row">
+      <button type="button" class="orbit" data-module="agents">Agents</button>
+      <button type="button" class="orbit" data-module="chat">Chat</button>
+      <button type="button" class="orbit" data-module="listings">Listings</button>
+      <button type="button" class="orbit" data-module="escrows">Pipeline</button>
+      <button type="button" class="orbit" data-module="tasks">Tasks</button>
+      <button type="button" class="orbit" data-module="markets">Markets</button>
+      </div>
+      <div class="core" id="command-core" data-presence="idle">
+        <canvas id="core-field" class="core-field" width="320" height="320" aria-hidden="true"></canvas>
+        <div class="core-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="core-ring outer"></div>
+        <div class="core-ring mid"></div>
+        <div class="core-ring"></div>
+        <div class="core-inner">
+          <div class="core-text">COMMAND<br><span>READY</span></div>
+        </div>
+      </div>
+      <div class="presence">
+        <div id="presence-state">Idle</div>
+        <button type="button" id="presence-mic">Use microphone</button>
+        <p id="presence-note">Rings move on their own. The microphone is off. This is not a voice assistant and nothing is recorded.</p>
       </div>
     </div>
   </main>
@@ -275,11 +345,10 @@ body { overflow: hidden; }
       <h4>Tasks <span class="count" id="tasks-count">—</span></h4>
       <div id="tasks-rows"></div>
     </div>
-    <div class="work-panel">
-      <h4>Markets <span class="count">Watch</span></h4>
-      <div class="row"><span class="label">TSLA</span><span class="meta">—</span></div>
-      <div class="row"><span class="label">NVDA</span><span class="meta">—</span></div>
-      <div class="row"><span class="label">X / Signal Bot</span><span class="meta">Idle</span></div>
+    <div class="work-panel" id="markets-panel">
+      <h4>Markets <span class="count" id="markets-count">No feed</span></h4>
+      <div id="markets-rows"><div class="row"><span class="label">No holdings published.</span></div></div>
+      <button type="button" id="open-research">Open research</button>
     </div>
   </section>
 </div>
@@ -287,6 +356,26 @@ body { overflow: hidden; }
 <div class="overlay" id="overlay" onclick="if(event.target===this)closeSheet()">
   <div class="sheet" id="sheet"></div>
 </div>
+<div id="module-pop" class="module-pop" hidden>
+  <div class="module-card" role="dialog" aria-modal="true" aria-labelledby="module-title">
+    <div class="module-bar">
+      <button type="button" id="module-back">Back</button>
+      <h3 id="module-title">Module</h3>
+    </div>
+    <div id="module-host"></div>
+  </div>
+</div>
+<div id="research-ovl">
+  <div class="research-card" role="dialog" aria-modal="true" aria-labelledby="research-title">
+    <div class="module-bar">
+      <button type="button" id="research-back">Back</button>
+      <h3 id="research-title">Research</h3>
+    </div>
+    <div id="research-body"></div>
+  </div>
+</div>
+<script src="research-ui.js"></script>
+<script src="presence.js"></script>
 
 <script>
 // ── CONFIG ── paste your anon key on the next line
@@ -322,6 +411,7 @@ let idleSigningOut = false;
 async function idleSignOut() {
   if (idleSigningOut) return;
   idleSigningOut = true;
+  if (window.HQPresence) window.HQPresence.release('logout');
   try { await sb.auth.signOut({ scope: 'local' }); } catch (e) {}
   sessionStorage.removeItem(IDLE_KEY);
   location.reload();
@@ -339,7 +429,7 @@ setInterval(checkIdle, 60000);
 const stages = ['Initializing core','Loading agents','Syncing data','Checking session','Opening command channel'];
 const logs = ['core.online','agents ready','supabase client loaded','auth: waiting','system: nominal'];
 const checks = ['Core systems','Agent layer','Supabase client','Command chat'];
-let stageIdx = 0, logIdx = 0, checkIdx = 0, progress = 0;
+let stageIdx = 0, logIdx = 0, checkIdx = 0, progress = 0, bootTimer = 0, bootFinished = false;
 
 function boot() {
   const rain = document.getElementById('rain');
@@ -369,7 +459,7 @@ function boot() {
   const checksEl = document.getElementById('checks');
   checks.forEach(c => { const d = document.createElement('div'); d.textContent = '○ ' + c; checksEl.appendChild(d); });
 
-  const timer = setInterval(() => {
+  bootTimer = setInterval(() => {
     progress = Math.min(100, progress + 2.4);
     bar.style.width = progress + '%';
     if (progress > stageIdx * 20 && stageIdx < stages.length) stageEl.textContent = stages[stageIdx++];
@@ -384,14 +474,18 @@ function boot() {
       checksEl.children[checkIdx].textContent = '✓ ' + checks[checkIdx];
       checkIdx++;
     }
-    if (progress >= 100) { clearInterval(timer); setTimeout(finishBoot, 350); }
+    if (progress >= 100) { clearInterval(bootTimer); setTimeout(finishBoot, 350); }
   }, 55);
 }
 
 function finishBoot() {
+  if (bootFinished) return;
+  bootFinished = true;
+  clearInterval(bootTimer);
   document.getElementById('flash').classList.add('show');
   document.body.classList.add('shake');
   setTimeout(() => {
+    document.getElementById('flash').classList.remove('show');
     document.getElementById('boot').style.display = 'none';
     document.body.classList.remove('shake');
     checkSession();
@@ -426,6 +520,7 @@ function showApp(email) {
   document.getElementById('app').classList.add('on');
   document.getElementById('user-email').textContent = email || '';
   loadData();
+  loadResearch();
   tick();
   setInterval(tick, 10000);
 }
@@ -479,7 +574,7 @@ function renderRows(table, rows) {
 const AGENTS = [
   { id: 're', name: 'RE Ops', role: 'Listings & pipeline', color: '#f5c97a', status: 'Idle', detail: 'Monitors Follow Up Boss and listing activity.' },
   { id: 'inbox', name: 'Inbox', role: 'Email filter', color: '#5eead4', status: 'Waiting', detail: 'Ready to watch Gmail once connected.' },
-  { id: 'markets', name: 'Signal', role: 'X & markets', color: '#93c5fd', status: 'Idle', detail: 'Watches X for mentions tied to tracked positions.' },
+  { id: 'markets', name: 'Signal', role: 'X & markets', color: '#93c5fd', status: 'Idle', detail: 'Research notes, when published, open from Markets. This panel does not quote prices or send orders.' },
   { id: 'life', name: 'Life', role: 'Family & calendar', color: '#6ee7b7', status: 'Idle', detail: 'Tracks family schedule and personal follow-ups.' }
 ];
 
@@ -517,7 +612,11 @@ function reactCore() {
   core.classList.remove('speaking');
   void core.offsetWidth;
   core.classList.add('speaking');
-  coreSpeakTimer = setTimeout(() => core.classList.remove('speaking'), 1200);
+  if (window.HQPresence) window.HQPresence.markSpeaking(true);
+  coreSpeakTimer = setTimeout(() => {
+    core.classList.remove('speaking');
+    if (window.HQPresence) window.HQPresence.markSpeaking(false);
+  }, 1200);
 }
 function send() {
   const el = document.getElementById('input');
@@ -542,7 +641,91 @@ function reply(raw) {
   if (q.includes('task')) return 'Tasks panel is live from Supabase. High-priority items show with a red pill when status is set.';
   if (q.includes('pipeline') || q.includes('escrow')) return 'Pipeline & Escrow panel pulls from the escrows table.';
   if (q.includes('agent')) return 'Four agents listed. Click any for details.';
+  if (q.includes('market') || q.includes('stock') || q.includes('research')) return 'Markets shows published notes only. No live prices and no orders.';
   return 'Signed in. Ask about listings, tasks, pipeline, or agents.';
+}
+
+let researchState = { configured: false, holdings: [], watch: [], candidates: [], findings: [] };
+function paintResearch(state) {
+  researchState = state;
+  const rows = document.getElementById('markets-rows');
+  const count = document.getElementById('markets-count');
+  if (window.HQResearch && rows) rows.innerHTML = window.HQResearch.renderCard(state);
+  if (count) count.textContent = state.lastGood ? 'Notes' : (state.configured === false ? 'Not set up' : 'No feed');
+  const body = document.getElementById('research-body');
+  if (window.HQResearch && body && document.getElementById('research-ovl').classList.contains('open')) {
+    body.innerHTML = window.HQResearch.renderView(state);
+  }
+}
+function openResearch() {
+  const body = document.getElementById('research-body');
+  if (window.HQResearch && body) body.innerHTML = window.HQResearch.renderView(researchState);
+  document.getElementById('research-ovl').classList.add('open');
+  document.getElementById('research-back').focus();
+}
+function closeResearch() { document.getElementById('research-ovl').classList.remove('open'); }
+async function loadResearch() {
+  const blank = { configured: true, holdings: [], watch: [], candidates: [], findings: [], lastGood: null, attemptFailed: false };
+  try {
+    const wl = await sb.from('watchlist').select('bucket,symbol,asset_type,sort_order');
+    const goodQ = await sb.from('ingestion_runs').select('run_id,researched_at').eq('outcome', 'publish').order('researched_at', { ascending: false }).limit(1);
+    const latestQ = await sb.from('ingestion_runs').select('run_id,outcome,received_at,error_code').order('received_at', { ascending: false }).limit(1);
+    const missing = [wl.error, goodQ.error, latestQ.error].some(e => e && /does not exist|schema cache|42P01/i.test(e.message || ''));
+    if (missing) { paintResearch({ configured: false, holdings: [], watch: [], candidates: [], findings: [] }); return; }
+    const list = wl.data || [];
+    const pick = (bucket) => list.filter(r => r.bucket === bucket).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+    const good = (goodQ.data || [])[0];
+    const latest = (latestQ.data || [])[0];
+    let findings = [];
+    if (good) {
+      const found = await sb.from('research_findings').select('category,horizon,risk,title,summary,thesis,contrary,catalyst,downside,invalidation,symbol,impacted,sources,source_published_at').eq('run_id', good.run_id);
+      findings = (found.data || []).map(f => ({ ...f, as_of: f.source_published_at }));
+    }
+    paintResearch({
+      configured: true,
+      holdings: pick('holding'),
+      watch: pick('watch'),
+      candidates: pick('candidate'),
+      findings,
+      lastGood: good ? good.researched_at : null,
+      attemptFailed: !!(latest && latest.outcome === 'error')
+    });
+  } catch (e) {
+    paintResearch(blank);
+  }
+}
+
+const moduleHomes = new Map();
+const moduleTitles = { agents: 'Agents', chat: 'Chat', listings: 'Listings', escrows: 'Pipeline', tasks: 'Tasks', markets: 'Markets' };
+function moduleNode(key) {
+  if (key === 'agents') return document.querySelector('.agents');
+  if (key === 'chat') return document.querySelector('.chat');
+  return document.getElementById(key + '-panel') || document.getElementById(key === 'escrows' ? 'escrows-panel' : '');
+}
+function closeModule() {
+  moduleHomes.forEach((home, el) => {
+    el.classList.remove('popped');
+    if (home.next && home.next.parentNode === home.parent) home.parent.insertBefore(el, home.next);
+    else home.parent.appendChild(el);
+  });
+  moduleHomes.clear();
+  const pop = document.getElementById('module-pop');
+  if (pop) pop.hidden = true;
+}
+function openModule(key) {
+  closeModule();
+  const el = key === 'listings' ? document.getElementById('listings-panel')
+    : key === 'escrows' ? document.getElementById('escrows-panel')
+    : key === 'tasks' ? document.getElementById('tasks-panel')
+    : key === 'markets' ? document.getElementById('markets-panel')
+    : moduleNode(key);
+  if (!el) return;
+  moduleHomes.set(el, { parent: el.parentNode, next: el.nextSibling });
+  document.getElementById('module-host').appendChild(el);
+  el.classList.add('popped');
+  document.getElementById('module-title').textContent = moduleTitles[key] || 'Module';
+  document.getElementById('module-pop').hidden = false;
+  document.getElementById('module-back').focus();
 }
 
 function tick() {
@@ -564,6 +747,21 @@ boot();
   </div>
 </div>
 
-<script>document.addEventListener("keydown", e => { if (e.key === "Escape") closeDetail(); });</script>
+<script>
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  const research = document.getElementById('research-ovl');
+  const pop = document.getElementById('module-pop');
+  if (document.getElementById('detail-ovl').classList.contains('open')) { closeDetail(); return; }
+  if (research && research.classList.contains('open')) { closeResearch(); return; }
+  if (pop && !pop.hidden) { closeModule(); return; }
+});
+document.getElementById('open-research').addEventListener('click', openResearch);
+document.getElementById('research-back').addEventListener('click', closeResearch);
+document.getElementById('research-ovl').addEventListener('click', e => { if (e.target.id === 'research-ovl') closeResearch(); });
+document.getElementById('module-back').addEventListener('click', closeModule);
+document.getElementById('module-pop').addEventListener('click', e => { if (e.target.id === 'module-pop') closeModule(); });
+document.querySelectorAll('.orbit').forEach(btn => btn.addEventListener('click', () => openModule(btn.dataset.module)));
+</script>
 </body>
 </html>
