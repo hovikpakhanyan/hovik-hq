@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import vm from 'node:vm';
-import { authorizeTransport, readBody } from '../publisher/body.mjs';
+import { authorizeTransport, readBody, readWebBody } from '../publisher/body.mjs';
+import { publisherDbConfig } from '../publisher/db-config.mjs';
 import { EventEmitter } from 'node:events';
 import { forbiddenKey, httpsOk, preflight } from '../publisher/validate.mjs';
 import { createIssuer } from '../publisher/oauth.mjs';
@@ -21,7 +22,7 @@ test('rejects caller owner, sql, and price fields', () => {
   assert.equal(httpsOk('https://news.example.com/story'), true);
 });
 
-test('oauth code, refresh rotation, and revoked replay', () => {
+test('oauth code, refresh rotation, and revoked replay', async () => {
   const issuer = createIssuer({
     clientId: 'hq-client',
     redirectUris: ['https://connector.example/callback'],
@@ -29,32 +30,33 @@ test('oauth code, refresh rotation, and revoked replay', () => {
     resource: 'https://publisher.example'
   });
   const challenge = createHash('sha256').update('verifier-value').digest('base64url');
-  const denied = issuer.authorize({ client_id: 'hq-client', redirect_uri: 'https://connector.example/callback', code_challenge: challenge, code_challenge_method: 'S256', scope: 'research.publish', bootstrap: 'nope' });
+  const denied = await issuer.authorize({ client_id: 'hq-client', redirect_uri: 'https://connector.example/callback', code_challenge: challenge, code_challenge_method: 'S256', scope: 'research.publish', bootstrap: 'nope' });
   assert.equal(denied.status, 401);
-  const ok = issuer.authorize({ client_id: 'hq-client', redirect_uri: 'https://connector.example/callback', code_challenge: challenge, code_challenge_method: 'S256', scope: 'research.publish research.status.read', state: 's', bootstrap: 'owner-bootstrap' });
+  const ok = await issuer.authorize({ client_id: 'hq-client', redirect_uri: 'https://connector.example/callback', code_challenge: challenge, code_challenge_method: 'S256', scope: 'research.publish research.status.read', state: 's', bootstrap: 'owner-bootstrap' });
   const code = new URL(ok.redirect).searchParams.get('code');
-  const first = issuer.token({ grant_type: 'authorization_code', client_id: 'hq-client', code, redirect_uri: 'https://connector.example/callback', code_verifier: 'verifier-value' });
+  const first = await issuer.token({ grant_type: 'authorization_code', client_id: 'hq-client', code, redirect_uri: 'https://connector.example/callback', code_verifier: 'verifier-value' });
   assert.ok(first.access_token);
-  const rotated = issuer.token({ grant_type: 'refresh_token', client_id: 'hq-client', refresh_token: first.refresh_token });
+  const rotated = await issuer.token({ grant_type: 'refresh_token', client_id: 'hq-client', refresh_token: first.refresh_token });
   assert.ok(rotated.access_token);
-  const replay = issuer.token({ grant_type: 'refresh_token', client_id: 'hq-client', refresh_token: first.refresh_token });
+  const replay = await issuer.token({ grant_type: 'refresh_token', client_id: 'hq-client', refresh_token: first.refresh_token });
   assert.equal(replay.error, 'invalid_grant');
-  assert.equal(issuer.introspect(rotated.access_token), null);
+  assert.equal(await issuer.introspect(rotated.access_token), null);
 });
 
-test('revoke kills the access token in the same family', () => {
+test('revoke kills the access token in the same family', async () => {
   const issuer = createIssuer({ clientId: 'hq-client', redirectUris: ['https://connector.example/callback'], bootstrapCode: 'owner-bootstrap', resource: 'https://publisher.example' });
   const challenge = createHash('sha256').update('verifier-value').digest('base64url');
-  const ok = issuer.authorize({ client_id: 'hq-client', redirect_uri: 'https://connector.example/callback', code_challenge: challenge, code_challenge_method: 'S256', scope: 'research.publish', bootstrap: 'owner-bootstrap' });
+  const ok = await issuer.authorize({ client_id: 'hq-client', redirect_uri: 'https://connector.example/callback', code_challenge: challenge, code_challenge_method: 'S256', scope: 'research.publish', bootstrap: 'owner-bootstrap' });
   const code = new URL(ok.redirect).searchParams.get('code');
-  const issued = issuer.token({ grant_type: 'authorization_code', client_id: 'hq-client', code, redirect_uri: 'https://connector.example/callback', code_verifier: 'verifier-value' });
-  issuer.revoke(issued.refresh_token);
-  assert.equal(issuer.introspect(issued.access_token), null);
+  const issued = await issuer.token({ grant_type: 'authorization_code', client_id: 'hq-client', code, redirect_uri: 'https://connector.example/callback', code_verifier: 'verifier-value' });
+  await issuer.revoke(issued.refresh_token);
+  assert.equal(await issuer.introspect(issued.access_token), null);
 });
 
 test('bootstrap is not accepted from a query string and bodies are bounded', async () => {
   assert.deepEqual(authorizeTransport('GET', true), { status: 400, error: 'bootstrap_in_query' });
-  assert.deepEqual(authorizeTransport('GET', false), { status: 405, error: 'use_post_body' });
+  assert.equal(authorizeTransport('GET', false), null);
+  assert.deepEqual(authorizeTransport('PUT', false), { status: 405, error: 'method_not_allowed' });
   assert.equal(authorizeTransport('POST', false), null);
   const req = new EventEmitter();
   req.destroy = () => {};
@@ -67,6 +69,83 @@ test('mcp tool call without a token is not a publisher', async () => {
   const issuer = createIssuer({ clientId: 'c', redirectUris: ['https://x/cb'], bootstrapCode: 'b', resource: 'https://p.example' });
   const res = await handleMcp({ auth: issuer, db: { publish() { throw new Error('should not write'); } }, body: { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'publish_stock_research', arguments: {} } }, authorization: '' });
   assert.equal(res.status, 401);
+  assert.match(res.headers['www-authenticate'], /resource_metadata="https:\/\/p\.example\/\.well-known\/oauth-protected-resource"/);
+  assert.match(res.headers['www-authenticate'], /scope="research\.publish research\.status\.read"/);
+  assert.equal(issuer.protectedResource().resource, 'https://p.example/mcp');
+});
+
+test('authorize GET is a consent form and the owner code is not in it', async () => {
+  const issuer = createIssuer({
+    clientId: 'hq-client',
+    redirectUris: ['https://connector.example/callback'],
+    bootstrapCode: 'owner-bootstrap-secret',
+    resource: 'https://publisher.example'
+  });
+  const challenge = createHash('sha256').update('verifier-value').digest('base64url');
+  const view = issuer.consent({
+    response_type: 'code',
+    client_id: 'hq-client',
+    redirect_uri: 'https://connector.example/callback',
+    code_challenge: challenge,
+    code_challenge_method: 'S256',
+    scope: 'research.publish',
+    state: '<script>'
+  });
+  assert.equal(view.html.includes('owner-bootstrap-secret'), false);
+  assert.equal(view.html.includes('action="/oauth/authorize"'), true);
+  assert.equal(view.html.includes('action="/oauth/authorize?'), false);
+  assert.equal(view.html.includes('<script>'), false);
+  assert.equal(view.html.includes('&lt;script&gt;'), true);
+  assert.equal(view.html.includes('https://connector.example/callback'), true);
+  const posted = await issuer.authorize({
+    response_type: 'code',
+    client_id: 'hq-client',
+    redirect_uri: 'https://connector.example/callback',
+    code_challenge: challenge,
+    code_challenge_method: 'S256',
+    scope: 'research.publish',
+    state: 'kept-state',
+    bootstrap: 'owner-bootstrap-secret'
+  });
+  const back = new URL(posted.redirect);
+  assert.equal(back.origin + back.pathname, 'https://connector.example/callback');
+  assert.equal(back.searchParams.get('state'), 'kept-state');
+  assert.ok(back.searchParams.get('code'));
+});
+
+test('authorize attempts are throttled before another secret check', async () => {
+  const issuer = createIssuer({
+    clientId: 'hq-client',
+    redirectUris: ['https://connector.example/callback'],
+    bootstrapCode: 'owner-bootstrap-secret',
+    resource: 'https://publisher.example',
+    limits: { authorize: 1, token: 1, windowSeconds: 600 }
+  });
+  const challenge = createHash('sha256').update('verifier-value').digest('base64url');
+  const fields = {
+    response_type: 'code', client_id: 'hq-client', redirect_uri: 'https://connector.example/callback',
+    code_challenge: challenge, code_challenge_method: 'S256', scope: 'research.publish', bootstrap: 'wrong'
+  };
+  assert.equal((await issuer.authorize(fields)).status, 401);
+  assert.equal((await issuer.authorize({ ...fields, bootstrap: 'owner-bootstrap-secret' })).error, 'rate_limited');
+});
+
+test('oversized web bodies cancel the reader', async () => {
+  let cancelled = false;
+  const req = { body: { getReader: () => ({
+    async read() { return { done: false, value: new Uint8Array(10) }; },
+    async cancel() { cancelled = true; }
+  }) } };
+  await assert.rejects(() => readWebBody(req, 8), (err) => err.status === 413);
+  assert.equal(cancelled, true);
+});
+
+test('database url must be the publisher role over tls', () => {
+  const ok = publisherDbConfig('postgresql://hq_publisher.zjsvrfudkigjvvhlehdh:secret@aws-0-us-west-1.pooler.supabase.com:6543/postgres?sslmode=require');
+  assert.equal(ok.max, 1);
+  assert.throws(() => publisherDbConfig('postgresql://postgres.zjsvrfudkigjvvhlehdh:secret@aws-0-us-west-1.pooler.supabase.com:6543/postgres?sslmode=require'), (err) => err.code === 'publisher_role_required');
+  assert.throws(() => publisherDbConfig('postgresql://service_role.zjsvrfudkigjvvhlehdh:secret@aws-0-us-west-1.pooler.supabase.com:6543/postgres?sslmode=require'), (err) => err.code === 'publisher_role_required');
+  assert.throws(() => publisherDbConfig('postgresql://hq_publisher.zjsvrfudkigjvvhlehdh:secret@aws-0-us-west-1.pooler.supabase.com:6543/postgres'), (err) => err.code === 'tls_required');
 });
 
 test('research view escapes text and withholds bad links', () => {
