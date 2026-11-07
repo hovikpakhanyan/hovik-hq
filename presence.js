@@ -75,95 +75,167 @@
 
   var fieldTime = 0;
   var micLevel = 0;
-  var dots = [];
-  for (var di = 0; di < 42; di++) dots.push({ a: Math.random() * 6.28, r: 0.34 + Math.random() * 0.58, s: 0.006 + Math.random() * 0.016, w: 0.6 + Math.random() * 1.6 });
+  var assistantLevel = 0;
+  var motes = [];
+  (function buildMotes() {
+    var planes = [
+      { ax: 0.22, ay: 0.18, spin: 0.09 },
+      { ax: 1.15, ay: 0.55, spin: -0.06 },
+      { ax: 1.85, ay: -0.4, spin: 0.045 },
+      { ax: 0.62, ay: 1.35, spin: -0.11 },
+      { ax: 2.4, ay: 0.9, spin: 0.07 }
+    ];
+    function tilt(x, y, z, plane) {
+      var cy = Math.cos(plane.ax), sy = Math.sin(plane.ax);
+      var cz = Math.cos(plane.ay), sz = Math.sin(plane.ay);
+      var y1 = y * cy - z * sy;
+      var z1 = y * sy + z * cy;
+      return { x: x * cz - z1 * sz, y: y1, z: x * sz + z1 * cz };
+    }
+    var pi, i, n = 36;
+    for (pi = 0; pi < planes.length; pi++) {
+      for (i = 0; i < n; i++) {
+        if ((i + pi) % 7 === 0) continue;
+        var a = (i / n) * 6.283185;
+        var radius = 0.78 + (pi % 3) * 0.08;
+        var shell = tilt(Math.cos(a) * radius, Math.sin(a) * radius, 0, planes[pi]);
+        var flow = a + pi;
+        var looseR = 0.88 + (i % 5) * 0.04;
+        motes.push({
+          sx: shell.x, sy: shell.y, sz: shell.z, plane: pi, spin: planes[pi].spin,
+          dx: Math.cos(flow) * looseR, dy: Math.sin(flow * 1.7) * looseR * 0.82, dz: Math.sin(flow) * looseR,
+          drift: 0.22 + (i % 5) * 0.05, size: i % 8 === 0 ? 2.2 : 1.2, link: i % 8 < 5, strut: false
+        });
+      }
+    }
+    for (i = 0; i < 22; i++) {
+      var ang = i * 0.78 + 0.3;
+      var outer = i % 3 === 0 ? 1.28 : 1.02;
+      motes.push({
+        sx: Math.cos(ang) * outer, sy: Math.sin(ang * 0.85) * outer * 0.7, sz: Math.sin(ang) * outer * 0.62,
+        plane: i % 5, spin: 0.05 * (i % 2 ? -1 : 1),
+        dx: Math.cos(ang + 1) * 0.9, dy: Math.sin(ang) * 0.75, dz: Math.sin(ang * 1.2) * 0.9,
+        drift: 0.18, size: 1.5, link: false, strut: true
+      });
+    }
+  })();
+
+  function smoothstep(t) {
+    t = Math.max(0, Math.min(1, t));
+    return t * t * (3 - 2 * t);
+  }
+  function gatherAmount(time) {
+    var u = (time % 18) / 18;
+    if (u < 0.26) return 0;
+    if (u < 0.4) return smoothstep((u - 0.26) / 0.14);
+    if (u < 0.66) return 1;
+    if (u < 0.84) return 1 - smoothstep((u - 0.66) / 0.18);
+    return 0;
+  }
+  function rotY(p, a) {
+    var c = Math.cos(a), s = Math.sin(a);
+    return { x: p.x * c + p.z * s, y: p.y, z: -p.x * s + p.z * c };
+  }
+
+  function fieldAnchor(w, h) {
+    var canvas = document.getElementById('core-field');
+    var core = document.getElementById('command-core');
+    if (!canvas || !core) return { x: w * 0.5, y: h * 0.46, core: Math.min(w, h) * 0.16 };
+    var cr = canvas.getBoundingClientRect();
+    var br = core.getBoundingClientRect();
+    var sx = w / Math.max(1, cr.width);
+    var sy = h / Math.max(1, cr.height);
+    return {
+      x: (br.left + br.width / 2 - cr.left) * sx,
+      y: (br.top + br.height / 2 - cr.top) * sy,
+      core: Math.min(br.width, br.height) / 2 * sx
+    };
+  }
 
   function paintField(ctx, w, h, time, level) {
     ctx.clearRect(0, 0, w, h);
-    var cx = w / 2, cy = h / 2, R = Math.min(w, h) * 0.47;
-    var wash = ctx.createRadialGradient(cx, cy, R * 0.02, cx, cy, R);
-    wash.addColorStop(0, 'rgba(236, 255, 252, 0.95)');
-    wash.addColorStop(0.08, 'rgba(94, 234, 212, 0.45)');
-    wash.addColorStop(0.22, 'rgba(20, 70, 78, 0.18)');
-    wash.addColorStop(1, 'rgba(94, 234, 212, 0)');
-    ctx.fillStyle = wash;
+    var anchor = fieldAnchor(w, h);
+    var cx = anchor.x, cy = anchor.y;
+    var R = Math.min(Math.max(anchor.core * 2.5, Math.min(w, h) * 0.34), Math.min(w, h) * 0.48);
+    var voice = assistantLevel;
+    var form = Math.min(1, gatherAmount(time) * (1 - voice * 0.15) + voice * 0.9);
+    var breathe = 1 + Math.sin(time * 0.7) * 0.015 + level * 0.12 + voice * 0.05;
+    var nod = Math.sin(time * 0.21) * 0.12;
+    var haze = ctx.createRadialGradient(cx - R * 0.04, cy - R * 0.05, R * 0.02, cx, cy, R * 1.05);
+    haze.addColorStop(0, 'rgba(255, 244, 220, 0.55)');
+    haze.addColorStop(0.16, 'rgba(226, 168, 64, 0.28)');
+    haze.addColorStop(0.42, 'rgba(120, 72, 18, 0.12)');
+    haze.addColorStop(1, 'rgba(80, 48, 10, 0)');
+    ctx.fillStyle = haze;
     ctx.beginPath();
-    ctx.arc(cx, cy, R, 0, 6.28);
+    ctx.arc(cx, cy, R * 1.35, 0, 6.283185);
     ctx.fill();
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(time * 0.08);
-    for (var t = 0; t < 96; t++) {
-      var major = t % 8 === 0;
-      ctx.rotate((Math.PI * 2) / 96);
-      ctx.strokeStyle = major ? 'rgba(245, 201, 122, 0.72)' : 'rgba(94, 234, 212, 0.32)';
-      ctx.lineWidth = major ? 1.4 : 0.6;
-      ctx.beginPath();
-      ctx.moveTo(R * (major ? 0.78 : 0.86), 0);
-      ctx.lineTo(R * 0.96, 0);
-      ctx.stroke();
+    var drawn = [];
+    var prev = {};
+    for (var i = 0; i < motes.length; i++) {
+      var m = motes[i];
+      var spin = time * m.spin;
+      var structured = rotY({ x: m.sx, y: m.sy * Math.cos(nod) - m.sz * Math.sin(nod), z: m.sy * Math.sin(nod) + m.sz * Math.cos(nod) }, spin);
+      var looseA = time * m.drift + i;
+      var loose = {
+        x: m.dx + Math.cos(looseA) * 0.16,
+        y: m.dy + Math.sin(looseA * 0.8) * 0.12,
+        z: m.dz + Math.sin(looseA * 0.6) * 0.14
+      };
+      var p = {
+        x: loose.x + (structured.x - loose.x) * form,
+        y: loose.y + (structured.y - loose.y) * form,
+        z: loose.z + (structured.z - loose.z) * form
+      };
+      var f = 2.5 / (2.5 + p.z);
+      var sx = cx + p.x * f * R * breathe;
+      var sy = cy + p.y * f * R * breathe * 0.9;
+      var depth = (p.z + 1.35) / 2.5;
+      drawn.push({ x: sx, y: sy, z: p.z, depth: depth, size: m.size * (0.65 + depth), i: i, link: m.link, plane: m.plane, strut: m.strut });
+      if (m.link && prev[m.plane]) {
+        var a = prev[m.plane];
+        if (Math.abs(a.i - i) < 3) drawn[drawn.length - 1].line = a;
+      }
+      prev[m.plane] = drawn[drawn.length - 1];
     }
-    ctx.restore();
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(-time * 0.22);
-    ctx.strokeStyle = 'rgba(158, 240, 255, 0.28)';
-    ctx.lineWidth = 1;
-    for (var s = 0; s < 18; s++) {
-      ctx.rotate(Math.PI / 9);
-      ctx.beginPath();
-      ctx.moveTo(R * 0.2, 0);
-      ctx.lineTo(R * 0.7, 0);
-      ctx.stroke();
-    }
-    ctx.restore();
-    var arcs = [
-      { r: 0.96, span: 0.55, speed: 0.85, color: 'rgba(94,234,212,0.95)', width: 2.4, gap: 0.9 },
-      { r: 0.86, span: 1.15, speed: -0.55, color: 'rgba(210,255,250,0.8)', width: 1.5, gap: 1.35 },
-      { r: 0.74, span: 0.42, speed: 1.25, color: 'rgba(245,201,122,0.9)', width: 2, gap: 0.72 },
-      { r: 0.63, span: 1.8, speed: -0.95, color: 'rgba(94,234,212,0.7)', width: 3.2, gap: 2.2 },
-      { r: 0.5, span: 0.7, speed: 1.6, color: 'rgba(255,255,255,0.75)', width: 1.2, gap: 1.05 }
-    ];
-    arcs.forEach(function (arc, n) {
-      ctx.strokeStyle = arc.color;
-      ctx.lineWidth = arc.width;
-      var a0 = time * arc.speed + n * 0.4;
-      for (var k = 0; k < 3; k++) {
+    drawn.sort(function (a, b) { return a.z - b.z; });
+    for (var d = 0; d < drawn.length; d++) {
+      var q = drawn[d];
+      if (q.line && form > 0.08) {
+        var alpha = (0.12 + q.depth * 0.7) * form;
+        ctx.strokeStyle = q.depth > 0.55 ? 'rgba(255, 214, 140, ' + alpha + ')' : 'rgba(170, 104, 28, ' + (alpha * 0.75) + ')';
+        ctx.lineWidth = q.depth > 0.6 ? 1.45 : 0.75;
         ctx.beginPath();
-        var start = a0 + k * (arc.span + arc.gap);
-        ctx.arc(cx, cy, R * arc.r, start, start + arc.span);
+        ctx.moveTo(q.line.x, q.line.y);
+        ctx.lineTo(q.x, q.y);
         ctx.stroke();
       }
-    });
-    var amp = 6 + level * R * 0.22 + Math.sin(time * 2.2) * 4;
-    ctx.beginPath();
-    for (var i = 0; i <= 96; i++) {
-      var ang = (i / 96) * 6.28318;
-      var wave = Math.sin(ang * 7 - time * 3.4) * amp;
-      var rr = R * 0.36 + wave;
-      var x = cx + Math.cos(ang) * rr;
-      var y = cy + Math.sin(ang) * rr;
-      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      if (q.strut && form > 0.35) {
+        ctx.strokeStyle = 'rgba(255, 196, 96, ' + (0.35 * form * (0.4 + q.depth)) + ')';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(cx + (q.x - cx) * 0.22, cy + (q.y - cy) * 0.22);
+        ctx.lineTo(q.x, q.y);
+        ctx.stroke();
+      }
     }
-    ctx.closePath();
-    ctx.strokeStyle = 'rgba(210, 255, 250, 0.85)';
-    ctx.lineWidth = 1.4;
-    ctx.stroke();
-    dots.forEach(function (d) {
-      var ang = d.a + time * d.s * (state === 'speaking' ? 2.4 : 1);
-      var rr = R * d.r;
-      ctx.fillStyle = 'rgba(226, 255, 250, 0.9)';
+    for (d = 0; d < drawn.length; d++) {
+      q = drawn[d];
+      var bright = q.depth > 0.72;
+      ctx.fillStyle = bright ? 'rgba(255, 248, 230, ' + (0.45 + q.depth * 0.5) + ')' : 'rgba(214, 150, 48, ' + (0.18 + q.depth * 0.45) + ')';
       ctx.beginPath();
-      ctx.arc(cx + Math.cos(ang) * rr, cy + Math.sin(ang) * rr * 0.92, d.w, 0, 6.28);
+      ctx.arc(q.x, q.y, Math.max(0.6, q.size), 0, 6.283185);
       ctx.fill();
-    });
-    var nucleus = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 0.16);
-    nucleus.addColorStop(0, '#f4fffd');
-    nucleus.addColorStop(0.45, 'rgba(94,234,212,0.85)');
-    nucleus.addColorStop(1, 'rgba(94,234,212,0)');
+    }
+    var nx = cx - R * 0.05, ny = cy - R * 0.03;
+    var coreR = R * (0.16 + voice * 0.03);
+    var nucleus = ctx.createRadialGradient(nx, ny, coreR * 0.15, nx, ny, coreR);
+    nucleus.addColorStop(0, 'rgba(255, 252, 245, 0.95)');
+    nucleus.addColorStop(0.35, 'rgba(255, 196, 90, 0.75)');
+    nucleus.addColorStop(1, 'rgba(180, 100, 20, 0)');
     ctx.fillStyle = nucleus;
     ctx.beginPath();
-    ctx.arc(cx, cy, R * 0.16, 0, 6.28);
+    ctx.ellipse(nx, ny, coreR * 1.15, coreR * 0.82, -0.4, 0, 6.283185);
     ctx.fill();
   }
 
@@ -172,11 +244,11 @@
     var ctx = canvas.getContext('2d');
     function frame(now) {
       fieldTime = (now || 0) / 1000;
-      paintField(ctx, canvas.width, canvas.height, reduced ? 0.8 : fieldTime, micLevel);
+      paintField(ctx, canvas.width, canvas.height, reduced ? 8 : fieldTime, micLevel);
       if (reduced || hiddenPause || batteryPause || !particlesOn) { raf = 0; return; }
       raf = requestAnimationFrame(frame);
     }
-    if (reduced || hiddenPause || batteryPause) { paintField(ctx, canvas.width, canvas.height, 0.8, 0); return; }
+    if (reduced || hiddenPause || batteryPause) { paintField(ctx, canvas.width, canvas.height, 8, 0); return; }
     if (!raf) raf = requestAnimationFrame(frame);
   }
 
@@ -254,7 +326,8 @@
           var v = (data[i] - 128) / 128;
           sum += v * v;
         }
-        micLevel = Math.min(1, Math.sqrt(sum / data.length) * 4);
+        var heard = Math.min(1, Math.sqrt(sum / data.length) * 4);
+        micLevel += (heard - micLevel) * 0.18;
         requestAnimationFrame(pump);
       })();
       acquired.getTracks().forEach(function (t) {
@@ -274,10 +347,14 @@
     }
   }
 
-  function markSpeaking(on) {
-    if (on) setState('speaking', 'A local chat message was sent. The motion is not an assistant voice.');
-    else if (!stream) setState('idle', 'Rings move on their own. The microphone is off. This is not a voice assistant and nothing is recorded.');
-    else setState('listening', 'Level follows this browser microphone only. Nothing is recorded, uploaded, or sent to a voice assistant.');
+  function markSpeaking() {}
+  function setAssistantEnergy(level) {
+    assistantLevel = Math.max(0, Math.min(1, Number(level) || 0));
+    if (reduced || hiddenPause || batteryPause || !particlesOn) {
+      var canvas = document.getElementById('core-field');
+      if (!canvas) return;
+      paintField(canvas.getContext('2d'), canvas.width, canvas.height, 8, micLevel);
+    }
   }
 
   function boot() {
@@ -315,7 +392,13 @@
     startField();
   }
 
-  root.HQPresence = { release: release, markSpeaking: markSpeaking, boot: boot, getState: function () { return state; } };
+  root.HQPresence = {
+    release: release,
+    markSpeaking: markSpeaking,
+    setAssistantEnergy: setAssistantEnergy,
+    boot: boot,
+    getState: function () { return state; }
+  };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
 })(typeof globalThis !== 'undefined' ? globalThis : this);
