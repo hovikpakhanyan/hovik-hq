@@ -2,9 +2,6 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<!-- This site is hosted on Netlify. Anyone can build and deploy a site
-     like this one for free: https://netlify.new/?utm_campaign=loops&utm_source=ai-legible&utm_medium=owned&utm_content=comment&utm_id=3ae345a8-2865-4add-9cba-de86528f29e1
-     Netlify hosting facts for this site: static/SSR served via Netlify Edge. -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>HOVIK · COMMAND</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -166,6 +163,24 @@ body { overflow: hidden; }
   .agents, .chat { display: none; }
   .work { grid-template-columns: 1fr 1fr; }
 }
+
+/* PROPERTY DETAIL MODAL */
+.row.clickable { cursor: pointer; }
+.row.clickable:hover .label { color: var(--cyan); }
+#detail-ovl { position: fixed; inset: 0; z-index: 80; background: rgba(2,6,12,0.72); backdrop-filter: blur(3px); display: none; align-items: center; justify-content: center; }
+#detail-ovl.open { display: flex; }
+.detail-card { width: min(520px, 92vw); background: var(--surface); border: 1px solid var(--border-strong); border-radius: 10px; padding: 22px 24px; box-shadow: 0 0 40px rgba(94,234,212,0.08); }
+.detail-card h3 { font-family: var(--disp); font-size: 17px; letter-spacing: 0.04em; color: #eafaff; margin-bottom: 4px; }
+.detail-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
+.detail-close { background: none; border: 1px solid var(--border); color: var(--text-dim); border-radius: 4px; font-size: 11px; padding: 3px 9px; cursor: pointer; font-family: var(--mono); }
+.detail-close:hover { color: var(--cyan); border-color: rgba(94,234,212,0.35); }
+.detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 18px; margin-bottom: 14px; }
+.detail-item .k { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.1em; color: var(--text-muted); text-transform: uppercase; margin-bottom: 2px; }
+.detail-item .v { font-size: 14px; color: var(--text); }
+.detail-item .v.money { font-family: var(--mono); color: var(--gold); }
+.detail-note { border-top: 1px solid var(--border); padding-top: 12px; }
+.detail-note .k { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.1em; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px; }
+.detail-note .v { font-size: 12.5px; line-height: 1.55; color: var(--text-dim); }
 </style>
 </head>
 <body>
@@ -262,7 +277,47 @@ body { overflow: hidden; }
 const SUPABASE_URL = 'https://zjsvrfudkigjvvhlehdh.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpqc3ZyZnVka2lnanZ2aGxlaGRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM5OTMxMDAsImV4cCI6MjEwOTU2OTEwMH0.Xvw_864IEYQKsx4HSc_QnDDgnRF4N_7_dudBhtSVR0M';
 
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Session policy: no long-term persistence + 30-minute idle logout.
+// Session is stored in sessionStorage only: it survives a refresh in the same
+// tab, and is destroyed when the tab/window closes. Legacy long-lived
+// localStorage sessions are cleared on load.
+const sessionAdapter = {
+  getItem: (k) => sessionStorage.getItem(k),
+  setItem: (k, v) => sessionStorage.setItem(k, v),
+  removeItem: (k) => sessionStorage.removeItem(k),
+};
+Object.keys(localStorage).filter(k => k.indexOf('sb-') === 0).forEach(k => localStorage.removeItem(k));
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: { storage: sessionAdapter, persistSession: true, autoRefreshToken: true }
+});
+
+// 30-minute inactivity logout (per-device: scope 'local' clears this tab's
+// session and best-effort revokes its refresh token server-side).
+// The clock lives in sessionStorage so a
+// refresh does not reset it; background tabs are checked on resume.
+const IDLE_LIMIT_MS = 30 * 60 * 1000;
+const IDLE_KEY = 'hq_last_activity';
+function touchActivity() { sessionStorage.setItem(IDLE_KEY, String(Date.now())); }
+function idleExceeded() {
+  const last = Number(sessionStorage.getItem(IDLE_KEY) || 0);
+  return last > 0 && (Date.now() - last) >= IDLE_LIMIT_MS;
+}
+let idleSigningOut = false;
+async function idleSignOut() {
+  if (idleSigningOut) return;
+  idleSigningOut = true;
+  try { await sb.auth.signOut({ scope: 'local' }); } catch (e) {}
+  sessionStorage.removeItem(IDLE_KEY);
+  location.reload();
+}
+async function checkIdle() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session && idleExceeded()) await idleSignOut();
+}
+['pointerdown', 'keydown', 'scroll', 'touchstart'].forEach(ev => window.addEventListener(ev, touchActivity, { passive: true }));
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkIdle(); });
+window.addEventListener('focus', checkIdle);
+setInterval(checkIdle, 60000);
 
 // ── Boot ──
 const stages = ['Initializing core','Loading agents','Syncing data','Checking session','Opening command channel'];
@@ -329,7 +384,9 @@ function finishBoot() {
 
 async function checkSession() {
   const { data: { session } } = await sb.auth.getSession();
+  if (session && idleExceeded()) { await idleSignOut(); return; }
   if (session) {
+    touchActivity();
     showApp(session.user.email);
   } else {
     document.getElementById('login').classList.add('show');
@@ -345,6 +402,7 @@ async function doLogin() {
   const { data, error } = await sb.auth.signInWithPassword({ email, password });
   if (error) { errEl.textContent = error.message; return; }
   document.getElementById('login').classList.remove('show');
+  touchActivity();
   showApp(data.user.email);
 }
 
@@ -365,18 +423,39 @@ async function loadData() {
   renderRows('tasks', tasks || []);
 }
 
+let DETAIL_ROWS = {};
+function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function fmtMoney(n) { return n == null ? '' : '$' + Number(n).toLocaleString('en-US'); }
+function openDetail(table, i) {
+  const d = (DETAIL_ROWS[table] || [])[i] || {};
+  const status = d.status || d.priority || '';
+  const items = [];
+  if (d.price != null) items.push(['LIST PRICE', fmtMoney(d.price), 1]);
+  if (d.terms) items.push(['COMMISSION', esc(d.terms)]);
+  if (d.net_est != null) items.push(['EST. NET AFTER SPLIT + 15% BROKERAGE', fmtMoney(d.net_est) + ' (est.)', 1]);
+  if (d.mls) items.push(['MLS', esc(d.mls)]);
+  if (d.priority) items.push(['PRIORITY', esc(d.priority)]);
+  document.getElementById('detail-title').textContent = d.address || d.subject || d.name || 'Untitled';
+  document.getElementById('detail-pill').innerHTML = status ? '<span class="pill ' + String(status).toLowerCase() + '">' + esc(status) + '</span>' : '';
+  document.getElementById('detail-grid').innerHTML = items.map(it =>
+    '<div class="detail-item"><div class="k">' + it[0] + '</div><div class="v' + (it[2] ? ' money' : '') + '">' + it[1] + '</div></div>').join('');
+  document.getElementById('detail-note').innerHTML = d.note ? esc(d.note) : '<span style="color:var(--text-muted)">No notes on file.</span>';
+  document.getElementById('detail-ovl').classList.add('open');
+}
+function closeDetail() { document.getElementById('detail-ovl').classList.remove('open'); }
 function renderRows(table, rows) {
   const container = document.getElementById(table + '-rows');
   const count = document.getElementById(table + '-count');
   if (!container) return;
   count.textContent = rows.length;
+  DETAIL_ROWS[table] = rows.map(r => r.data || {});
   if (!rows.length) { container.innerHTML = '<div class="row"><span class="label" style="color:var(--text-muted)">No records</span></div>'; return; }
-  container.innerHTML = rows.map(r => {
+  container.innerHTML = rows.map((r, i) => {
     const d = r.data || {};
     const label = d.address || d.subject || d.name || 'Untitled';
     const status = d.status || d.priority || '';
-    const pill = status ? `<span class="pill ${status.toLowerCase()}">${status}</span>` : '';
-    return `<div class="row"><span class="label">${label}</span>${pill}</div>`;
+    const pill = status ? `<span class="pill ${String(status).toLowerCase()}">${esc(status)}</span>` : '';
+    return `<div class="row clickable" onclick="openDetail('${table}', ${i})"><span class="label">${esc(label)}</span>${pill}</div>`;
   }).join('');
 }
 
@@ -447,5 +526,18 @@ function tick() {
 renderAgents();
 boot();
 </script>
+
+<div id="detail-ovl" onclick="if(event.target===this)closeDetail()">
+  <div class="detail-card">
+    <div class="detail-head">
+      <div><h3 id="detail-title"></h3><div id="detail-pill"></div></div>
+      <button class="detail-close" onclick="closeDetail()">ESC</button>
+    </div>
+    <div class="detail-grid" id="detail-grid"></div>
+    <div class="detail-note"><div class="k">Details / next steps</div><div class="v" id="detail-note"></div></div>
+  </div>
+</div>
+
+<script>document.addEventListener("keydown", e => { if (e.key === "Escape") closeDetail(); });</script>
 </body>
 </html>
