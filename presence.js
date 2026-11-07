@@ -76,46 +76,47 @@
   var fieldTime = 0;
   var micLevel = 0;
   var assistantLevel = 0;
-  var motes = [];
-  (function buildMotes() {
-    var planes = [
-      { ax: 0.22, ay: 0.18, spin: 0.09 },
-      { ax: 1.15, ay: 0.55, spin: -0.06 },
-      { ax: 1.85, ay: -0.4, spin: 0.045 },
-      { ax: 0.62, ay: 1.35, spin: -0.11 },
-      { ax: 2.4, ay: 0.9, spin: 0.07 }
-    ];
-    function tilt(x, y, z, plane) {
-      var cy = Math.cos(plane.ax), sy = Math.sin(plane.ax);
-      var cz = Math.cos(plane.ay), sz = Math.sin(plane.ay);
+  var shells = [];
+  var dust = [];
+  (function buildSphere() {
+    function tilt(x, y, z, ax, ay) {
+      var cy = Math.cos(ax), sy = Math.sin(ax);
+      var cz = Math.cos(ay), sz = Math.sin(ay);
       var y1 = y * cy - z * sy;
       var z1 = y * sy + z * cy;
       return { x: x * cz - z1 * sz, y: y1, z: x * sz + z1 * cz };
     }
-    var pi, i, n = 36;
-    for (pi = 0; pi < planes.length; pi++) {
-      for (i = 0; i < n; i++) {
-        if ((i + pi) % 7 === 0) continue;
-        var a = (i / n) * 6.283185;
-        var radius = 0.78 + (pi % 3) * 0.08;
-        var shell = tilt(Math.cos(a) * radius, Math.sin(a) * radius, 0, planes[pi]);
-        var flow = a + pi;
-        var looseR = 0.88 + (i % 5) * 0.04;
-        motes.push({
-          sx: shell.x, sy: shell.y, sz: shell.z, plane: pi, spin: planes[pi].spin,
-          dx: Math.cos(flow) * looseR, dy: Math.sin(flow * 1.7) * looseR * 0.82, dz: Math.sin(flow) * looseR,
-          drift: 0.22 + (i % 5) * 0.05, size: i % 8 === 0 ? 2.2 : 1.2, link: i % 8 < 5, strut: false
-        });
+    var rings = [
+      { ax: 0.15, ay: 0.05, r: 1.0, n: 120, spin: 0.38, gap: 16, keep: 12 },
+      { ax: 0.15, ay: 0.05, r: 0.94, n: 110, spin: 0.38, gap: 14, keep: 8 },
+      { ax: 1.05, ay: 0.4, r: 0.97, n: 112, spin: -0.29, gap: 15, keep: 11 },
+      { ax: 1.05, ay: 0.4, r: 0.9, n: 100, spin: -0.29, gap: 12, keep: 7 },
+      { ax: 1.7, ay: -0.5, r: 0.92, n: 108, spin: 0.22, gap: 13, keep: 9 },
+      { ax: 0.55, ay: 1.2, r: 0.86, n: 96, spin: -0.33, gap: 14, keep: 9 },
+      { ax: 2.3, ay: 0.75, r: 0.8, n: 90, spin: 0.26, gap: 11, keep: 7 },
+      { ax: 0.85, ay: 2.05, r: 0.58, n: 72, spin: -0.46, gap: 9, keep: 6 },
+      { ax: 0.25, ay: 0.7, r: 0.4, n: 56, spin: 0.52, gap: 8, keep: 5 },
+      { ax: 1.4, ay: 1.5, r: 0.28, n: 44, spin: -0.6, gap: 7, keep: 4 }
+    ];
+    rings.forEach(function (ring) {
+      var pts = [];
+      for (var i = 0; i < ring.n; i++) {
+        var a = (i / ring.n) * 6.283185;
+        pts.push(tilt(Math.cos(a) * ring.r, Math.sin(a) * ring.r, 0, ring.ax, ring.ay));
       }
-    }
-    for (i = 0; i < 22; i++) {
-      var ang = i * 0.78 + 0.3;
-      var outer = i % 3 === 0 ? 1.28 : 1.02;
-      motes.push({
-        sx: Math.cos(ang) * outer, sy: Math.sin(ang * 0.85) * outer * 0.7, sz: Math.sin(ang) * outer * 0.62,
-        plane: i % 5, spin: 0.05 * (i % 2 ? -1 : 1),
-        dx: Math.cos(ang + 1) * 0.9, dy: Math.sin(ang) * 0.75, dz: Math.sin(ang * 1.2) * 0.9,
-        drift: 0.18, size: 1.5, link: false, strut: true
+      shells.push({ pts: pts, spin: ring.spin, gap: ring.gap, keep: ring.keep, r: ring.r });
+    });
+    for (var i = 0; i < 420; i++) {
+      var y = 1 - (i / 419) * 2;
+      var rad = Math.sqrt(Math.max(0, 1 - y * y));
+      var th = i * 2.399963;
+      var shell = 0.62 + (i % 7) * 0.055;
+      dust.push({
+        x: Math.cos(th) * rad * shell,
+        y: y * shell,
+        z: Math.sin(th) * rad * shell,
+        tw: (i % 13) / 13,
+        spin: i % 2 ? 0.33 : -0.27
       });
     }
   })();
@@ -152,90 +153,101 @@
     };
   }
 
+  function project(p, spin, nod, breathe, cx, cy, R) {
+    var y1 = p.y * Math.cos(nod) - p.z * Math.sin(nod);
+    var z1 = p.y * Math.sin(nod) + p.z * Math.cos(nod);
+    var q = rotY({ x: p.x, y: y1, z: z1 }, spin);
+    var f = 2.15 / (2.35 + q.z);
+    return {
+      x: cx + q.x * f * R * breathe,
+      y: cy + q.y * f * R * breathe * 0.94,
+      z: q.z,
+      depth: (q.z + 1.2) / 2.3
+    };
+  }
+
   function paintField(ctx, w, h, time, level) {
     ctx.clearRect(0, 0, w, h);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
     var anchor = fieldAnchor(w, h);
     var cx = anchor.x, cy = anchor.y;
-    var R = Math.min(Math.max(anchor.core * 2.5, Math.min(w, h) * 0.34), Math.min(w, h) * 0.48);
     var voice = assistantLevel;
     var form = Math.min(1, gatherAmount(time) * (1 - voice * 0.15) + voice * 0.9);
-    var breathe = 1 + Math.sin(time * 0.7) * 0.015 + level * 0.12 + voice * 0.05;
-    var nod = Math.sin(time * 0.21) * 0.12;
-    var haze = ctx.createRadialGradient(cx - R * 0.04, cy - R * 0.05, R * 0.02, cx, cy, R * 1.05);
-    haze.addColorStop(0, 'rgba(255, 244, 220, 0.55)');
-    haze.addColorStop(0.16, 'rgba(226, 168, 64, 0.28)');
-    haze.addColorStop(0.42, 'rgba(120, 72, 18, 0.12)');
-    haze.addColorStop(1, 'rgba(80, 48, 10, 0)');
+    var breathe = 1 + Math.sin(time * 0.65) * 0.012 + level * 0.1 + voice * 0.04;
+    var R = Math.max(48, anchor.core * (1.22 + form * 0.08));
+    var nod = Math.sin(time * 0.23) * 0.18;
+    var haze = ctx.createRadialGradient(cx - R * 0.08, cy - R * 0.06, R * 0.05, cx, cy, R * 1.08);
+    haze.addColorStop(0, 'rgba(255, 236, 196, 0.42)');
+    haze.addColorStop(0.28, 'rgba(214, 146, 42, 0.16)');
+    haze.addColorStop(0.72, 'rgba(140, 78, 16, 0.08)');
+    haze.addColorStop(1, 'rgba(80, 40, 8, 0)');
     ctx.fillStyle = haze;
     ctx.beginPath();
-    ctx.arc(cx, cy, R * 1.35, 0, 6.283185);
+    ctx.arc(cx, cy, R * 1.08, 0, 6.283185);
     ctx.fill();
-    var drawn = [];
-    var prev = {};
-    for (var i = 0; i < motes.length; i++) {
-      var m = motes[i];
-      var spin = time * m.spin;
-      var structured = rotY({ x: m.sx, y: m.sy * Math.cos(nod) - m.sz * Math.sin(nod), z: m.sy * Math.sin(nod) + m.sz * Math.cos(nod) }, spin);
-      var looseA = time * m.drift + i;
-      var loose = {
-        x: m.dx + Math.cos(looseA) * 0.16,
-        y: m.dy + Math.sin(looseA * 0.8) * 0.12,
-        z: m.dz + Math.sin(looseA * 0.6) * 0.14
-      };
-      var p = {
-        x: loose.x + (structured.x - loose.x) * form,
-        y: loose.y + (structured.y - loose.y) * form,
-        z: loose.z + (structured.z - loose.z) * form
-      };
-      var f = 2.5 / (2.5 + p.z);
-      var sx = cx + p.x * f * R * breathe;
-      var sy = cy + p.y * f * R * breathe * 0.9;
-      var depth = (p.z + 1.35) / 2.5;
-      drawn.push({ x: sx, y: sy, z: p.z, depth: depth, size: m.size * (0.65 + depth), i: i, link: m.link, plane: m.plane, strut: m.strut });
-      if (m.link && prev[m.plane]) {
-        var a = prev[m.plane];
-        if (Math.abs(a.i - i) < 3) drawn[drawn.length - 1].line = a;
+    var pieces = [];
+    shells.forEach(function (shell) {
+      var spin = time * shell.spin;
+      var keep = shell.keep + Math.round(form * 3);
+      var projected = [];
+      for (var i = 0; i < shell.pts.length; i++) projected.push(project(shell.pts[i], spin, nod, breathe, cx, cy, R));
+      for (var s = 0; s < projected.length; s++) {
+        if ((s % shell.gap) >= keep) continue;
+        var a = projected[s];
+        var b = projected[(s + 1) % projected.length];
+        var dist = Math.hypot(a.x - b.x, a.y - b.y);
+        if (dist < 1.5 || dist > R * 0.22) continue;
+        pieces.push({ a: a, b: b, z: (a.z + b.z) / 2, depth: (a.depth + b.depth) / 2, inner: shell.r < 0.5 });
       }
-      prev[m.plane] = drawn[drawn.length - 1];
-    }
-    drawn.sort(function (a, b) { return a.z - b.z; });
-    for (var d = 0; d < drawn.length; d++) {
-      var q = drawn[d];
-      if (q.line && form > 0.08) {
-        var alpha = (0.12 + q.depth * 0.7) * form;
-        ctx.strokeStyle = q.depth > 0.55 ? 'rgba(255, 214, 140, ' + alpha + ')' : 'rgba(170, 104, 28, ' + (alpha * 0.75) + ')';
-        ctx.lineWidth = q.depth > 0.6 ? 1.45 : 0.75;
-        ctx.beginPath();
-        ctx.moveTo(q.line.x, q.line.y);
-        ctx.lineTo(q.x, q.y);
-        ctx.stroke();
-      }
-      if (q.strut && form > 0.35) {
-        ctx.strokeStyle = 'rgba(255, 196, 96, ' + (0.35 * form * (0.4 + q.depth)) + ')';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(cx + (q.x - cx) * 0.22, cy + (q.y - cy) * 0.22);
-        ctx.lineTo(q.x, q.y);
-        ctx.stroke();
-      }
-    }
-    for (d = 0; d < drawn.length; d++) {
-      q = drawn[d];
-      var bright = q.depth > 0.72;
-      ctx.fillStyle = bright ? 'rgba(255, 248, 230, ' + (0.45 + q.depth * 0.5) + ')' : 'rgba(214, 150, 48, ' + (0.18 + q.depth * 0.45) + ')';
+    });
+    pieces.sort(function (p, q) { return p.z - q.z; });
+    for (var n = 0; n < pieces.length; n++) {
+      var seg = pieces[n];
+      var alpha = (seg.inner ? 0.28 : 0.14) + seg.depth * (0.35 + form * 0.4);
+      ctx.strokeStyle = seg.depth > 0.62 ? 'rgba(255, 196, 90, ' + (alpha * 0.45) + ')' : 'rgba(140, 78, 18, ' + (alpha * 0.35) + ')';
+      ctx.lineWidth = seg.depth > 0.62 ? 3.2 : 1.8;
+      var mx0 = (seg.a.x + seg.b.x) / 2;
+      var my0 = (seg.a.y + seg.b.y) / 2;
+      var dx0 = mx0 - cx, dy0 = my0 - cy;
+      var len0 = Math.hypot(dx0, dy0) || 1;
+      var bow0 = Math.min(8, Math.hypot(seg.a.x - seg.b.x, seg.a.y - seg.b.y) * 0.4);
       ctx.beginPath();
-      ctx.arc(q.x, q.y, Math.max(0.6, q.size), 0, 6.283185);
+      ctx.moveTo(seg.a.x, seg.a.y);
+      ctx.quadraticCurveTo(mx0 + dx0 / len0 * bow0, my0 + dy0 / len0 * bow0, seg.b.x, seg.b.y);
+      ctx.stroke();
+      ctx.strokeStyle = seg.depth > 0.62 ? 'rgba(255, 228, 170, ' + alpha + ')' : 'rgba(190, 120, 36, ' + (alpha * 0.85) + ')';
+      ctx.lineWidth = seg.depth > 0.62 ? 1.15 : 0.65;
+      var mx = (seg.a.x + seg.b.x) / 2;
+      var my = (seg.a.y + seg.b.y) / 2;
+      var dx = mx - cx, dy = my - cy;
+      var len = Math.hypot(dx, dy) || 1;
+      var bow = Math.min(7, Math.hypot(seg.a.x - seg.b.x, seg.a.y - seg.b.y) * 0.35);
+      ctx.beginPath();
+      ctx.moveTo(seg.a.x, seg.a.y);
+      ctx.quadraticCurveTo(mx + dx / len * bow, my + dy / len * bow, seg.b.x, seg.b.y);
+      ctx.stroke();
+    }
+    for (var d = 0; d < dust.length; d++) {
+      var mote = dust[d];
+      var loose = 1 + (1 - form) * 0.06 * Math.sin(time * 0.8 + mote.tw * 6.28);
+      var p = project({ x: mote.x * loose, y: mote.y * loose, z: mote.z * loose }, time * mote.spin, nod, breathe, cx, cy, R);
+      var glitter = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(time * 1.7 + mote.tw * 12));
+      var bright = p.depth > 0.7 && glitter > 0.72;
+      ctx.fillStyle = bright ? 'rgba(255, 248, 230, ' + (0.55 + p.depth * 0.4) + ')' : 'rgba(214, 154, 52, ' + (0.12 + p.depth * 0.4 * glitter) + ')';
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, bright ? 1.7 : 0.7 + p.depth, 0, 6.283185);
       ctx.fill();
     }
-    var nx = cx - R * 0.05, ny = cy - R * 0.03;
-    var coreR = R * (0.16 + voice * 0.03);
-    var nucleus = ctx.createRadialGradient(nx, ny, coreR * 0.15, nx, ny, coreR);
-    nucleus.addColorStop(0, 'rgba(255, 252, 245, 0.95)');
-    nucleus.addColorStop(0.35, 'rgba(255, 196, 90, 0.75)');
-    nucleus.addColorStop(1, 'rgba(180, 100, 20, 0)');
+    var nx = cx - R * 0.04, ny = cy - R * 0.03;
+    var coreR = R * (0.11 + voice * 0.02);
+    var nucleus = ctx.createRadialGradient(nx, ny, 0, nx, ny, coreR);
+    nucleus.addColorStop(0, 'rgba(255, 250, 240, 0.92)');
+    nucleus.addColorStop(0.45, 'rgba(255, 186, 70, 0.55)');
+    nucleus.addColorStop(1, 'rgba(160, 90, 16, 0)');
     ctx.fillStyle = nucleus;
     ctx.beginPath();
-    ctx.ellipse(nx, ny, coreR * 1.15, coreR * 0.82, -0.4, 0, 6.283185);
+    ctx.ellipse(nx, ny, coreR * 1.2, coreR * 0.78, -0.5, 0, 6.283185);
     ctx.fill();
   }
 
