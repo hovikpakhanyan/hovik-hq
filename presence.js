@@ -93,15 +93,20 @@
           y: Math.cos(mid.x * 7 + mid.z * 3) * 0.42,
           z: Math.sin(mid.z * 5 + mid.y * 6) * 0.42
         },
-        kind: kind
+        kind: kind,
+        heat: 0.5 + 0.5 * Math.sin(mid.x * 13 + mid.z * 9 + mid.y * 4)
       });
     }
     var shells = [
-      { r: 0.99, lat0: 0.05, lon0: 0.2, step: 0.085 },
-      { r: 0.88, lat0: -0.08, lon0: 0.55, step: 0.095 },
-      { r: 0.74, lat0: 0.12, lon0: -0.35, step: 0.1 },
-      { r: 0.52, lat0: -0.04, lon0: 1.1, step: 0.11 }
+      { r: 0.99, lat0: 0.05, lon0: 0.2, step: 0.085, tilt: 0.14 },
+      { r: 0.88, lat0: -0.08, lon0: 0.55, step: 0.095, tilt: -0.2 },
+      { r: 0.74, lat0: 0.12, lon0: -0.35, step: 0.1, tilt: 0.26 },
+      { r: 0.52, lat0: -0.04, lon0: 1.1, step: 0.11, tilt: -0.1 }
     ];
+    function tiltShell(p, ax) {
+      var c = Math.cos(ax), s = Math.sin(ax);
+      return { x: p.x, y: p.y * c - p.z * s, z: p.y * s + p.z * c };
+    }
     var si, lat, lon, dLat, dLon, a, b, c, jitter, noise;
     for (si = 0; si < shells.length; si++) {
       var shell = shells[si];
@@ -117,31 +122,32 @@
           dLat = 0.04 * scale;
           dLon = (0.048 * scale) / Math.max(0.3, Math.cos(latJ));
           var cell = (Math.round(lat * 17) + Math.round(lon * 11) + si) % 7;
-          a = sph(latJ, lonJ, shell.r);
+          a = tiltShell(sph(latJ, lonJ, shell.r), shell.tilt);
           if (cell < 3) {
-            b = sph(latJ, lonJ + dLon, shell.r);
+            b = tiltShell(sph(latJ, lonJ + dLon, shell.r), shell.tilt);
             push('dash', [a, b]);
           } else if (cell < 5) {
-            b = sph(latJ + dLat, lonJ, shell.r);
+            b = tiltShell(sph(latJ + dLat, lonJ, shell.r), shell.tilt);
             push('dash', [a, b]);
           } else if (cell === 5) {
-            b = sph(latJ, lonJ + dLon * 0.75, shell.r);
-            c = sph(latJ + dLat * 0.75, lonJ + dLon * 0.75, shell.r);
+            b = tiltShell(sph(latJ, lonJ + dLon * 0.75, shell.r), shell.tilt);
+            c = tiltShell(sph(latJ + dLat * 0.75, lonJ + dLon * 0.75, shell.r), shell.tilt);
             push('elbow', [a, b, c]);
           } else {
-            b = sph(latJ + dLat * 0.65, lonJ, shell.r);
-            c = sph(latJ + dLat * 0.65, lonJ + dLon * 0.6, shell.r);
+            b = tiltShell(sph(latJ + dLat * 0.65, lonJ, shell.r), shell.tilt);
+            c = tiltShell(sph(latJ + dLat * 0.65, lonJ + dLon * 0.6, shell.r), shell.tilt);
             push('step', [a, b, c]);
           }
         }
       }
     }
-    var bands = [0.4, 3.6];
-    for (var s = 0; s < 28; s++) {
-      var band = bands[s % 2];
-      var spikeLon = band + (s % 7) * 0.09;
-      var spikeLat = -0.85 + Math.floor(s / 7) * 0.38;
-      push('strut', [sph(spikeLat, spikeLon, 0.96), sph(spikeLat, spikeLon, 1.28)]);
+    var bands = [0.55, 4.05];
+    for (var s = 0; s < 36; s++) {
+      var band = bands[s < 24 ? 0 : 1];
+      var spikeLon = band + (s % 8) * 0.07;
+      var spikeLat = -0.9 + (s % 6) * 0.28;
+      var reach = 1.22 + (s % 5) * 0.045;
+      push('strut', [sph(spikeLat, spikeLon, 0.94), sph(spikeLat, spikeLon, reach)]);
     }
   })();
 
@@ -219,11 +225,13 @@
         moved = { x: src.x + trace.drift.x * slide, y: src.y + trace.drift.y * slide, z: src.z + trace.drift.z * slide };
         q = project(moved, spin, nod, breathe, cx, cy, R);
         len = Math.hypot(ax.x - q.x, ax.y - q.y);
-        if (len < 0.6 || len > 14) continue;
+        if (len < 0.6 || len > (trace.kind === 'strut' ? 56 : 14)) continue;
         depth = (ax.depth + q.depth) / 2;
         radial = Math.hypot((ax.x + q.x) / 2 - cx, (ax.y + q.y) / 2 - cy) / R;
         bin = Math.max(0, Math.min(7, Math.floor(depth * 7)));
-        if (radial > 0.72 && radial < 1.02) bin = Math.min(7, bin + 2);
+        if (trace.heat > 0.72) bin = Math.min(7, bin + 1);
+        else if (trace.heat < 0.28) bin = Math.max(0, bin - 1);
+        if (radial > 0.72 && radial < 1.05) bin = Math.min(7, bin + 2);
         bins[bin].push(ax.x, ax.y, q.x, q.y);
       }
     }
@@ -250,6 +258,42 @@
       ctx.lineWidth = bin > 5 ? 1.6 : 1.05;
       ctx.stroke();
     }
+    if (form > 0.45) {
+      var panels = [
+        { lat: -0.22, lon: 0.35, h: 0.28, w: 0.22 },
+        { lat: 0.18, lon: 1.7, h: 0.34, w: 0.16 },
+        { lat: -0.48, lon: 4.15, h: 0.22, w: 0.2 }
+      ];
+      ctx.lineWidth = 1.3;
+      for (i = 0; i < panels.length; i++) {
+        var panel = panels[i];
+        var rungs = [];
+        var rung;
+        for (rung = 0; rung <= 4; rung++) {
+          rungs.push([
+            project(sphLocal(panel.lat + panel.h * (rung / 4), panel.lon, 0.9), spin, nod, breathe, cx, cy, R),
+            project(sphLocal(panel.lat + panel.h * (rung / 4), panel.lon + panel.w, 0.9), spin, nod, breathe, cx, cy, R)
+          ]);
+        }
+        var sideA = rungs[0][0], sideB = rungs[4][0], sideC = rungs[4][1], sideD = rungs[0][1];
+        ctx.beginPath();
+        ctx.moveTo(sideA.x, sideA.y);
+        ctx.lineTo(sideB.x, sideB.y);
+        ctx.lineTo(sideC.x, sideC.y);
+        ctx.lineTo(sideD.x, sideD.y);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(255, 150, 20, ' + ((form - 0.45) * 0.28) + ')';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255, 186, 40, 0.7)';
+        ctx.stroke();
+        ctx.beginPath();
+        for (rung = 1; rung < 4; rung++) {
+          ctx.moveTo(rungs[rung][0].x, rungs[rung][0].y);
+          ctx.lineTo(rungs[rung][1].x, rungs[rung][1].y);
+        }
+        ctx.stroke();
+      }
+    }
     if (!glowCanvas) {
       glowCanvas = document.createElement('canvas');
       glowCtx = glowCanvas.getContext('2d', { alpha: true });
@@ -267,26 +311,18 @@
     ctx.drawImage(glowCanvas, 0, 0, w, h);
     ctx.filter = 'none';
     ctx.restore();
-    ctx.globalCompositeOperation = 'source-over';
-    if (form > 0.45) {
-      var panels = [[-0.15, 0.4], [0.45, 1.6], [-0.55, 4.2]];
-      ctx.fillStyle = 'rgba(255, 170, 40, ' + ((form - 0.45) * 0.22) + ')';
-      for (i = 0; i < panels.length; i++) {
-        var lat0 = panels[i][0], lon0 = panels[i][1];
-        var corners = [
-          project(sphLocal(lat0, lon0, 0.99), spin, nod, breathe, cx, cy, R),
-          project(sphLocal(lat0 + 0.18, lon0, 0.99), spin, nod, breathe, cx, cy, R),
-          project(sphLocal(lat0 + 0.18, lon0 + 0.16, 0.99), spin, nod, breathe, cx, cy, R),
-          project(sphLocal(lat0, lon0 + 0.16, 0.99), spin, nod, breathe, cx, cy, R)
-        ];
-        ctx.beginPath();
-        ctx.moveTo(corners[0].x, corners[0].y);
-        ctx.lineTo(corners[1].x, corners[1].y);
-        ctx.lineTo(corners[2].x, corners[2].y);
-        ctx.lineTo(corners[3].x, corners[3].y);
-        ctx.closePath();
-        ctx.fill();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineWidth = 1.05;
+    for (bin = 0; bin < 3; bin++) {
+      var far = bins[bin];
+      if (!far.length) continue;
+      ctx.beginPath();
+      for (i = 0; i < far.length; i += 4) {
+        ctx.moveTo(far[i], far[i + 1]);
+        ctx.lineTo(far[i + 2], far[i + 3]);
       }
+      ctx.strokeStyle = colors[bin];
+      ctx.stroke();
     }
     ctx.globalCompositeOperation = 'lighter';
     ctx.lineWidth = 5;
