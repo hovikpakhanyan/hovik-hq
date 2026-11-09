@@ -76,65 +76,74 @@
   var fieldTime = 0;
   var micLevel = 0;
   var assistantLevel = 0;
-  var bodies = [];
-  var links = [];
-  var struts = [];
+  var wisps = [];
   (function buildSphere() {
-    var seed = 7;
+    var seed = 11;
     function rnd() {
-      seed = (seed * 16807 + 11) % 2147483647;
+      seed = (seed * 48271) % 2147483647;
       return seed / 2147483647;
     }
-    function tilt(x, y, z, ax, ay) {
-      var cy = Math.cos(ax), sy = Math.sin(ax);
-      var cz = Math.cos(ay), sz = Math.sin(ay);
-      var y1 = y * cy - z * sy;
-      var z1 = y * sy + z * cy;
-      return { x: x * cz - z1 * sz, y: y1, z: x * sz + z1 * cz };
+    function unit() {
+      var z = rnd() * 2 - 1;
+      var t = rnd() * 6.283185;
+      var r = Math.sqrt(Math.max(0, 1 - z * z));
+      return { x: Math.cos(t) * r, y: z, z: Math.sin(t) * r };
     }
-    function cloud() {
-      var u = rnd(), v = rnd(), w = rnd();
-      var z = 2 * u - 1;
-      var rad = Math.sqrt(Math.max(0, 1 - z * z));
-      var th = v * 6.283185;
-      var reach = 0.28 + w * 0.85;
-      return { x: Math.cos(th) * rad * reach, y: z * reach, z: Math.sin(th) * rad * reach };
+    function perp(n) {
+      var a = Math.abs(n.x) < 0.8 ? { x: 1, y: 0, z: 0 } : { x: 0, y: 1, z: 0 };
+      var x = a.y * n.z - a.z * n.y;
+      var y = a.z * n.x - a.x * n.z;
+      var z = a.x * n.y - a.y * n.x;
+      var len = Math.hypot(x, y, z) || 1;
+      return { x: x / len, y: y / len, z: z / len };
     }
-    var rings = [
-      { ax: 0.2, ay: 0.1, r: 0.98, n: 72, spin: 0.16 },
-      { ax: 1.15, ay: 0.45, r: 0.9, n: 64, spin: -0.12 },
-      { ax: 1.8, ay: -0.35, r: 0.82, n: 60, spin: 0.1 },
-      { ax: 0.6, ay: 1.35, r: 0.72, n: 52, spin: -0.14 },
-      { ax: 0.4, ay: 0.8, r: 0.42, n: 40, spin: 0.2 }
-    ];
-    rings.forEach(function (ring, ri) {
-      var ids = [];
-      for (var i = 0; i < ring.n; i++) {
-        var a = (i / ring.n) * 6.283185;
-        var home = tilt(Math.cos(a) * ring.r, Math.sin(a) * ring.r, 0, ring.ax, ring.ay);
-        var id = bodies.length;
-        bodies.push({ free: cloud(), home: home, spin: ring.spin, tw: rnd() });
-        ids.push(id);
+    function cross(a, b) {
+      return {
+        x: a.y * b.z - a.z * b.y,
+        y: a.z * b.x - a.x * b.z,
+        z: a.x * b.y - a.y * b.x
+      };
+    }
+    function addArc(kind, radius, arc, steps) {
+      var n = unit();
+      if (kind === 'shell' && n.x + n.y * 0.4 < 0 && rnd() < 0.45) return;
+      var u = perp(n);
+      var v = cross(n, u);
+      var phase = rnd() * 6.283185;
+      var pts = [];
+      for (var i = 0; i < steps; i++) {
+        var a = phase + (i / (steps - 1) - 0.5) * arc;
+        var c = Math.cos(a), s = Math.sin(a);
+        pts.push({
+          x: (n.x * c + u.x * s) * radius,
+          y: (n.y * c + u.y * s) * radius,
+          z: (n.z * c + u.z * s) * radius
+        });
       }
-      for (var s = 0; s < ring.n; s++) {
-        var slot = (s + ri * 3) % 14;
-        if (slot >= 5) continue;
-        if (ri % 2 === 0 && s > ring.n * 0.55 && s < ring.n * 0.75) continue;
-        links.push({ a: ids[s], b: ids[(s + 1) % ring.n], spin: ring.spin, inner: ring.r < 0.5 });
-      }
-    });
-    for (var k = 0; k < 18; k++) {
-      var ang = k * 0.85 + 0.4;
-      var dir = tilt(Math.cos(ang), Math.sin(ang) * 0.72, Math.sin(ang * 0.7) * 0.55, 0.4, 0.2);
-      var len = Math.hypot(dir.x, dir.y, dir.z) || 1;
-      dir = { x: dir.x / len, y: dir.y / len, z: dir.z / len };
-      var inner = bodies.length;
-      bodies.push({ free: cloud(), home: { x: dir.x * 0.34, y: dir.y * 0.34, z: dir.z * 0.34 }, spin: 0.08, tw: rnd() });
-      var outer = bodies.length;
-      bodies.push({ free: cloud(), home: { x: dir.x * 1.18, y: dir.y * 1.18, z: dir.z * 1.18 }, spin: 0.08, tw: rnd() });
-      struts.push({ a: inner, b: outer });
+      wisps.push({
+        pts: pts,
+        drift: { x: (rnd() - 0.5) * 0.55, y: (rnd() - 0.5) * 0.55, z: (rnd() - 0.5) * 0.55 },
+        spin: rnd() < 0.5 ? 0.22 : -0.17,
+        kind: kind
+      });
     }
-    for (var d = 0; d < 180; d++) bodies.push({ free: cloud(), home: cloud(), spin: d % 2 ? 0.11 : -0.09, tw: rnd(), mote: true });
+    var i;
+    for (i = 0; i < 170; i++) addArc('shell', 0.84 + rnd() * 0.16, 0.95 + rnd() * 0.7, 7);
+    for (i = 0; i < 55; i++) addArc('inner', 0.3 + rnd() * 0.22, 0.8 + rnd() * 0.55, 6);
+    for (i = 0; i < 22; i++) {
+      var n = unit();
+      if (n.y < -0.2 && rnd() < 0.5) continue;
+      var inner = 0.72, outer = 1.16 + rnd() * 0.12;
+      wisps.push({
+        pts: [
+          { x: n.x * inner, y: n.y * inner, z: n.z * inner },
+          { x: n.x * outer, y: n.y * outer, z: n.z * outer }
+        ],
+        drift: { x: (rnd() - 0.5) * 0.6, y: (rnd() - 0.5) * 0.6, z: (rnd() - 0.5) * 0.6 },
+        spin: 0.12,
+        kind: 'strut'
+      });
+    }
   })();
 
   function smoothstep(t) {
@@ -182,10 +191,6 @@
     };
   }
 
-  function mix(a, b, t) {
-    return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t };
-  }
-
   function paintField(ctx, w, h, time, level) {
     ctx.clearRect(0, 0, w, h);
     ctx.lineCap = 'round';
@@ -194,70 +199,77 @@
     var cx = anchor.x, cy = anchor.y;
     var voice = assistantLevel;
     var form = Math.min(1, gatherAmount(time) * (1 - voice * 0.15) + voice * 0.9);
-    var breathe = 1 + Math.sin(time * 0.65) * 0.012 + level * 0.1 + voice * 0.04;
-    var R = Math.max(48, anchor.core * 1.28);
-    var nod = Math.sin(time * 0.23) * 0.12;
-    var haze = ctx.createRadialGradient(cx - R * 0.06, cy - R * 0.04, R * 0.04, cx, cy, R * 1.05);
-    haze.addColorStop(0, 'rgba(255, 228, 180, ' + (0.16 + form * 0.12) + ')');
-    haze.addColorStop(0.45, 'rgba(180, 110, 28, ' + (0.05 + form * 0.06) + ')');
-    haze.addColorStop(1, 'rgba(60, 30, 8, 0)');
+    var breathe = 1 + Math.sin(time * 0.6) * 0.01 + level * 0.08 + voice * 0.04;
+    var stageMin = Math.min(w, h);
+    var R = Math.min(stageMin * 0.4, Math.max(anchor.core * 1.5, stageMin * 0.34));
+    var nod = Math.sin(time * 0.2) * 0.1;
+    var haze = ctx.createRadialGradient(cx - R * 0.05, cy - R * 0.04, R * 0.02, cx, cy, R);
+    haze.addColorStop(0, 'rgba(255, 236, 200, 0.28)');
+    haze.addColorStop(0.35, 'rgba(210, 140, 40, 0.1)');
+    haze.addColorStop(0.78, 'rgba(120, 64, 12, 0.05)');
+    haze.addColorStop(1, 'rgba(40, 20, 4, 0)');
     ctx.fillStyle = haze;
     ctx.beginPath();
-    ctx.arc(cx, cy, R * 1.05, 0, 6.283185);
+    ctx.arc(cx, cy, R, 0, 6.283185);
     ctx.fill();
-    var placed = [];
-    for (var i = 0; i < bodies.length; i++) {
-      var body = bodies[i];
-      var drift = {
-        x: body.free.x + Math.sin(time * 0.35 + body.tw * 6) * 0.05,
-        y: body.free.y + Math.cos(time * 0.28 + body.tw * 4) * 0.05,
-        z: body.free.z
-      };
-      placed.push(project(mix(drift, body.home, form), time * body.spin * (body.mote ? 1 : 0.35), nod, breathe, cx, cy, R));
+    var draw = [];
+    for (var i = 0; i < wisps.length; i++) {
+      var wisp = wisps[i];
+      if (wisp.kind === 'strut' && form < 0.4) continue;
+      var slide = 1 - form;
+      var pts = [];
+      var zSum = 0;
+      for (var p = 0; p < wisp.pts.length; p++) {
+        var src = wisp.pts[p];
+        var moved = {
+          x: src.x + wisp.drift.x * slide,
+          y: src.y + wisp.drift.y * slide,
+          z: src.z + wisp.drift.z * slide
+        };
+        var q = project(moved, time * wisp.spin, nod, breathe, cx, cy, R);
+        pts.push(q);
+        zSum += q.z;
+      }
+      draw.push({ pts: pts, z: zSum / pts.length, kind: wisp.kind });
     }
-    var strokes = [];
-    function consider(a, b, kind) {
-      if (form < (kind === 'strut' ? 0.45 : 0.22)) return;
-      var pa = placed[a], pb = placed[b];
-      var dist = Math.hypot(pa.x - pb.x, pa.y - pb.y);
-      var limit = kind === 'strut' ? R * 0.85 : R * 0.18;
-      if (dist < 1.2 || dist > limit) return;
-      strokes.push({ a: pa, b: pb, z: (pa.z + pb.z) / 2, depth: (pa.depth + pb.depth) / 2, kind: kind });
-    }
-    for (var s = 0; s < links.length; s++) consider(links[s].a, links[s].b, links[s].inner ? 'inner' : 'shell');
-    for (s = 0; s < struts.length; s++) consider(struts[s].a, struts[s].b, 'strut');
-    strokes.sort(function (p, q) { return p.z - q.z; });
-    for (var n = 0; n < strokes.length; n++) {
-      var seg = strokes[n];
-      var alpha = form * (0.2 + seg.depth * 0.65);
-      if (seg.kind === 'strut') alpha *= 0.85;
-      ctx.strokeStyle = seg.depth > 0.58 ? 'rgba(255, 220, 160, ' + alpha + ')' : 'rgba(150, 86, 20, ' + (alpha * 0.7) + ')';
-      ctx.lineWidth = seg.kind === 'strut' ? 1.4 : (seg.depth > 0.58 ? 1.8 : 0.8);
-      var mx = (seg.a.x + seg.b.x) / 2, my = (seg.a.y + seg.b.y) / 2;
-      var dx = mx - cx, dy = my - cy, len = Math.hypot(dx, dy) || 1;
-      var bow = seg.kind === 'strut' ? 0 : Math.min(6, Math.hypot(seg.a.x - seg.b.x, seg.a.y - seg.b.y) * 0.3);
+    draw.sort(function (a, b) { return a.z - b.z; });
+    for (i = 0; i < draw.length; i++) {
+      var item = draw[i];
+      var depth = 0;
+      for (p = 0; p < item.pts.length; p++) depth += item.pts[p].depth;
+      depth /= item.pts.length;
+      if (item.kind !== 'strut') {
+        var dot = item.pts[0];
+        ctx.fillStyle = depth > 0.62 ? 'rgba(255, 244, 214, 0.85)' : 'rgba(196, 130, 40, 0.45)';
+        ctx.beginPath();
+        ctx.arc(dot.x, dot.y, depth > 0.62 ? 1.5 : 0.8, 0, 6.283185);
+        ctx.fill();
+      }
+      var fade = item.kind === 'strut' ? Math.max(0, (form - 0.55) / 0.45) : Math.max(0, (form - 0.08) / 0.92);
+      if (fade < 0.04) continue;
+      var alpha = ((item.kind === 'inner' ? 0.5 : 0.34) + depth * 0.55) * fade;
+      var near = depth > 0.6;
+      ctx.strokeStyle = near ? 'rgba(255, 220, 150, ' + alpha + ')' : 'rgba(140, 78, 18, ' + (alpha * 0.65) + ')';
+      ctx.lineWidth = item.kind === 'strut' ? 1.3 : (near ? 1.7 : 0.7);
       ctx.beginPath();
-      ctx.moveTo(seg.a.x, seg.a.y);
-      ctx.quadraticCurveTo(mx + dx / len * bow, my + dy / len * bow, seg.b.x, seg.b.y);
+      ctx.moveTo(item.pts[0].x, item.pts[0].y);
+      if (item.pts.length === 2) ctx.lineTo(item.pts[1].x, item.pts[1].y);
+      else {
+        for (p = 1; p < item.pts.length - 1; p++) ctx.quadraticCurveTo(item.pts[p].x, item.pts[p].y, (item.pts[p].x + item.pts[p + 1].x) / 2, (item.pts[p].y + item.pts[p + 1].y) / 2);
+        var last = item.pts[item.pts.length - 1];
+        ctx.lineTo(last.x, last.y);
+      }
       ctx.stroke();
     }
-    for (i = 0; i < placed.length; i++) {
-      var p = placed[i];
-      var bright = p.depth > 0.72;
-      ctx.fillStyle = bright ? 'rgba(255, 246, 224, ' + (0.45 + p.depth * 0.5) + ')' : 'rgba(206, 142, 42, ' + (0.15 + p.depth * 0.45) + ')';
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, (bright ? 1.8 : 0.9) * (0.7 + p.depth * 0.5), 0, 6.283185);
-      ctx.fill();
-    }
-    var nx = cx - R * 0.04, ny = cy - R * 0.03;
-    var coreR = R * (0.1 + voice * 0.02);
+    var nx = cx - R * 0.03, ny = cy - R * 0.02;
+    var coreR = R * (0.09 + voice * 0.02);
     var nucleus = ctx.createRadialGradient(nx, ny, 0, nx, ny, coreR);
     nucleus.addColorStop(0, 'rgba(255, 250, 240, 0.95)');
-    nucleus.addColorStop(0.5, 'rgba(255, 186, 70, 0.5)');
-    nucleus.addColorStop(1, 'rgba(160, 90, 16, 0)');
+    nucleus.addColorStop(0.42, 'rgba(255, 190, 80, 0.55)');
+    nucleus.addColorStop(1, 'rgba(150, 80, 12, 0)');
     ctx.fillStyle = nucleus;
     ctx.beginPath();
-    ctx.ellipse(nx, ny, coreR * 1.15, coreR * 0.75, -0.45, 0, 6.283185);
+    ctx.ellipse(nx, ny, coreR, coreR * 0.72, -0.4, 0, 6.283185);
     ctx.fill();
   }
 
