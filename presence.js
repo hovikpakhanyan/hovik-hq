@@ -74,6 +74,8 @@
   }
 
   var fieldTime = 0;
+  var glowCanvas = null;
+  var glowCtx = null;
   var micLevel = 0;
   var assistantLevel = 0;
   var traces = [];
@@ -94,42 +96,52 @@
         kind: kind
       });
     }
-    var shells = [0.98, 0.9, 0.8];
-    var si, lat, lon, dLat, dLon, a, b, c;
+    var shells = [
+      { r: 0.99, lat0: 0.05, lon0: 0.2, step: 0.085 },
+      { r: 0.88, lat0: -0.08, lon0: 0.55, step: 0.095 },
+      { r: 0.74, lat0: 0.12, lon0: -0.35, step: 0.1 },
+      { r: 0.52, lat0: -0.04, lon0: 1.1, step: 0.11 }
+    ];
+    var si, lat, lon, dLat, dLon, a, b, c, jitter, noise;
     for (si = 0; si < shells.length; si++) {
-      var radius = shells[si];
-      for (lat = -1.15; lat <= 1.15; lat += 0.09) {
-        dLat = 0.045;
-        dLon = 0.055 / Math.max(0.28, Math.cos(lat));
-        for (lon = 0; lon < 6.283185; lon += 0.105) {
-          var cell = ((Math.round(lat * 20) + Math.round(lon * 12) + si * 3) % 9);
-          if (cell === 0 || cell === 1) continue;
-          if (lon > 2.2 && lon < 3.5 && lat > -0.2) continue;
-          a = sph(lat, lon, radius);
-          if (cell === 2 || cell === 3) {
-            b = sph(lat, lon + dLon, radius);
+      var shell = shells[si];
+      for (lat = -1.15; lat <= 1.15; lat += shell.step) {
+        for (lon = 0; lon < 6.283185; lon += shell.step * 1.15) {
+          noise = Math.sin(lat * 6.5 + lon * 3.7 + si) * Math.cos(lon * 4.2 - lat * 5.1 + si);
+          if (noise > 0.62) continue;
+          if (noise < -0.72 && ((Math.round(lat * 10) + si) % 2 === 0)) continue;
+          jitter = 0.012 * Math.sin(lon * 11 + lat * 7);
+          var latJ = lat + shell.lat0 + jitter;
+          var lonJ = lon + shell.lon0 + jitter * 1.4;
+          var scale = 0.55 + 0.7 * (0.5 + 0.5 * noise);
+          dLat = 0.04 * scale;
+          dLon = (0.048 * scale) / Math.max(0.3, Math.cos(latJ));
+          var cell = (Math.round(lat * 17) + Math.round(lon * 11) + si) % 7;
+          a = sph(latJ, lonJ, shell.r);
+          if (cell < 3) {
+            b = sph(latJ, lonJ + dLon, shell.r);
             push('dash', [a, b]);
-          } else if (cell === 4 || cell === 5) {
-            b = sph(lat + dLat, lon, radius);
+          } else if (cell < 5) {
+            b = sph(latJ + dLat, lonJ, shell.r);
             push('dash', [a, b]);
-          } else if (cell === 6) {
-            b = sph(lat, lon + dLon * 0.8, radius);
-            c = sph(lat + dLat * 0.8, lon + dLon * 0.8, radius);
+          } else if (cell === 5) {
+            b = sph(latJ, lonJ + dLon * 0.75, shell.r);
+            c = sph(latJ + dLat * 0.75, lonJ + dLon * 0.75, shell.r);
             push('elbow', [a, b, c]);
           } else {
-            b = sph(lat + dLat * 0.7, lon, radius);
-            c = sph(lat + dLat * 0.7, lon + dLon * 0.65, radius);
+            b = sph(latJ + dLat * 0.65, lonJ, shell.r);
+            c = sph(latJ + dLat * 0.65, lonJ + dLon * 0.6, shell.r);
             push('step', [a, b, c]);
           }
         }
       }
     }
-    for (var s = 0; s < 18; s++) {
-      var spikeLon = 0.35 + (s % 6) * 0.12;
-      var spikeLat = -0.7 + Math.floor(s / 6) * 0.45;
-      var inner = sph(spikeLat, spikeLon, 0.98);
-      var outer = sph(spikeLat, spikeLon, 1.16);
-      push('strut', [inner, outer]);
+    var bands = [0.4, 3.6];
+    for (var s = 0; s < 28; s++) {
+      var band = bands[s % 2];
+      var spikeLon = band + (s % 7) * 0.09;
+      var spikeLat = -0.85 + Math.floor(s / 7) * 0.38;
+      push('strut', [sph(spikeLat, spikeLon, 0.96), sph(spikeLat, spikeLon, 1.28)]);
     }
   })();
 
@@ -217,14 +229,14 @@
     }
     ctx.globalCompositeOperation = 'lighter';
     var colors = [
-      'rgba(160, 60, 0, 0.35)',
-      'rgba(190, 80, 0, 0.4)',
-      'rgba(220, 110, 10, 0.5)',
-      'rgba(240, 140, 20, 0.6)',
-      'rgba(255, 170, 30, 0.7)',
-      'rgba(255, 200, 60, 0.8)',
-      'rgba(255, 230, 120, 0.9)',
-      'rgba(255, 250, 220, 0.95)'
+      'rgba(150, 42, 0, 0.55)',
+      'rgba(185, 55, 0, 0.6)',
+      'rgba(215, 75, 0, 0.68)',
+      'rgba(235, 100, 0, 0.75)',
+      'rgba(250, 130, 0, 0.82)',
+      'rgba(255, 160, 15, 0.88)',
+      'rgba(255, 190, 40, 0.92)',
+      'rgba(255, 220, 90, 0.96)'
     ];
     for (bin = 0; bin < 8; bin++) {
       var batch = bins[bin];
@@ -238,6 +250,23 @@
       ctx.lineWidth = bin > 5 ? 1.6 : 1.05;
       ctx.stroke();
     }
+    if (!glowCanvas) {
+      glowCanvas = document.createElement('canvas');
+      glowCtx = glowCanvas.getContext('2d', { alpha: true });
+    }
+    var gw = Math.max(2, w >> 2), gh = Math.max(2, h >> 2);
+    if (glowCanvas.width !== gw || glowCanvas.height !== gh) {
+      glowCanvas.width = gw;
+      glowCanvas.height = gh;
+    }
+    glowCtx.clearRect(0, 0, gw, gh);
+    glowCtx.drawImage(ctx.canvas, 0, 0, gw, gh);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.filter = 'blur(' + Math.max(8, Math.round(R * 0.045)) + 'px)';
+    ctx.drawImage(glowCanvas, 0, 0, w, h);
+    ctx.filter = 'none';
+    ctx.restore();
     ctx.globalCompositeOperation = 'source-over';
     if (form > 0.45) {
       var panels = [[-0.15, 0.4], [0.45, 1.6], [-0.55, 4.2]];
@@ -260,11 +289,11 @@
       }
     }
     ctx.globalCompositeOperation = 'lighter';
-    ctx.lineWidth = 2.4;
+    ctx.lineWidth = 5;
     var arcs = [
-      { ax: 0.4, ay: 0.2, r: 0.36, spin: -0.25, a0: 0.2, a1: 4.2 },
-      { ax: 1.1, ay: -0.3, r: 0.3, spin: 0.2, a0: 1.1, a1: 5.0 },
-      { ax: -0.2, ay: 0.9, r: 0.24, spin: 0.15, a0: 0.6, a1: 4.4 }
+      { ax: 0.55, ay: 0.15, r: 0.62, spin: -0.16, a0: 0.3, a1: 4.6 },
+      { ax: 1.15, ay: -0.45, r: 0.7, spin: 0.12, a0: 0.8, a1: 5.1 },
+      { ax: -0.25, ay: 0.85, r: 0.5, spin: 0.1, a0: 1.2, a1: 4.8 }
     ];
     for (i = 0; i < arcs.length; i++) {
       var arc = arcs[i];
