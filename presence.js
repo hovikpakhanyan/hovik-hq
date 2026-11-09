@@ -76,9 +76,15 @@
   var fieldTime = 0;
   var micLevel = 0;
   var assistantLevel = 0;
-  var shells = [];
-  var dust = [];
+  var bodies = [];
+  var links = [];
+  var struts = [];
   (function buildSphere() {
+    var seed = 7;
+    function rnd() {
+      seed = (seed * 16807 + 11) % 2147483647;
+      return seed / 2147483647;
+    }
     function tilt(x, y, z, ax, ay) {
       var cy = Math.cos(ax), sy = Math.sin(ax);
       var cz = Math.cos(ay), sz = Math.sin(ay);
@@ -86,39 +92,49 @@
       var z1 = y * sy + z * cy;
       return { x: x * cz - z1 * sz, y: y1, z: x * sz + z1 * cz };
     }
+    function cloud() {
+      var u = rnd(), v = rnd(), w = rnd();
+      var z = 2 * u - 1;
+      var rad = Math.sqrt(Math.max(0, 1 - z * z));
+      var th = v * 6.283185;
+      var reach = 0.28 + w * 0.85;
+      return { x: Math.cos(th) * rad * reach, y: z * reach, z: Math.sin(th) * rad * reach };
+    }
     var rings = [
-      { ax: 0.15, ay: 0.05, r: 1.0, n: 120, spin: 0.38, gap: 16, keep: 12 },
-      { ax: 0.15, ay: 0.05, r: 0.94, n: 110, spin: 0.38, gap: 14, keep: 8 },
-      { ax: 1.05, ay: 0.4, r: 0.97, n: 112, spin: -0.29, gap: 15, keep: 11 },
-      { ax: 1.05, ay: 0.4, r: 0.9, n: 100, spin: -0.29, gap: 12, keep: 7 },
-      { ax: 1.7, ay: -0.5, r: 0.92, n: 108, spin: 0.22, gap: 13, keep: 9 },
-      { ax: 0.55, ay: 1.2, r: 0.86, n: 96, spin: -0.33, gap: 14, keep: 9 },
-      { ax: 2.3, ay: 0.75, r: 0.8, n: 90, spin: 0.26, gap: 11, keep: 7 },
-      { ax: 0.85, ay: 2.05, r: 0.58, n: 72, spin: -0.46, gap: 9, keep: 6 },
-      { ax: 0.25, ay: 0.7, r: 0.4, n: 56, spin: 0.52, gap: 8, keep: 5 },
-      { ax: 1.4, ay: 1.5, r: 0.28, n: 44, spin: -0.6, gap: 7, keep: 4 }
+      { ax: 0.2, ay: 0.1, r: 0.98, n: 72, spin: 0.16 },
+      { ax: 1.15, ay: 0.45, r: 0.9, n: 64, spin: -0.12 },
+      { ax: 1.8, ay: -0.35, r: 0.82, n: 60, spin: 0.1 },
+      { ax: 0.6, ay: 1.35, r: 0.72, n: 52, spin: -0.14 },
+      { ax: 0.4, ay: 0.8, r: 0.42, n: 40, spin: 0.2 }
     ];
-    rings.forEach(function (ring) {
-      var pts = [];
+    rings.forEach(function (ring, ri) {
+      var ids = [];
       for (var i = 0; i < ring.n; i++) {
         var a = (i / ring.n) * 6.283185;
-        pts.push(tilt(Math.cos(a) * ring.r, Math.sin(a) * ring.r, 0, ring.ax, ring.ay));
+        var home = tilt(Math.cos(a) * ring.r, Math.sin(a) * ring.r, 0, ring.ax, ring.ay);
+        var id = bodies.length;
+        bodies.push({ free: cloud(), home: home, spin: ring.spin, tw: rnd() });
+        ids.push(id);
       }
-      shells.push({ pts: pts, spin: ring.spin, gap: ring.gap, keep: ring.keep, r: ring.r });
+      for (var s = 0; s < ring.n; s++) {
+        var slot = (s + ri * 3) % 14;
+        if (slot >= 5) continue;
+        if (ri % 2 === 0 && s > ring.n * 0.55 && s < ring.n * 0.75) continue;
+        links.push({ a: ids[s], b: ids[(s + 1) % ring.n], spin: ring.spin, inner: ring.r < 0.5 });
+      }
     });
-    for (var i = 0; i < 420; i++) {
-      var y = 1 - (i / 419) * 2;
-      var rad = Math.sqrt(Math.max(0, 1 - y * y));
-      var th = i * 2.399963;
-      var shell = 0.62 + (i % 7) * 0.055;
-      dust.push({
-        x: Math.cos(th) * rad * shell,
-        y: y * shell,
-        z: Math.sin(th) * rad * shell,
-        tw: (i % 13) / 13,
-        spin: i % 2 ? 0.33 : -0.27
-      });
+    for (var k = 0; k < 18; k++) {
+      var ang = k * 0.85 + 0.4;
+      var dir = tilt(Math.cos(ang), Math.sin(ang) * 0.72, Math.sin(ang * 0.7) * 0.55, 0.4, 0.2);
+      var len = Math.hypot(dir.x, dir.y, dir.z) || 1;
+      dir = { x: dir.x / len, y: dir.y / len, z: dir.z / len };
+      var inner = bodies.length;
+      bodies.push({ free: cloud(), home: { x: dir.x * 0.34, y: dir.y * 0.34, z: dir.z * 0.34 }, spin: 0.08, tw: rnd() });
+      var outer = bodies.length;
+      bodies.push({ free: cloud(), home: { x: dir.x * 1.18, y: dir.y * 1.18, z: dir.z * 1.18 }, spin: 0.08, tw: rnd() });
+      struts.push({ a: inner, b: outer });
     }
+    for (var d = 0; d < 180; d++) bodies.push({ free: cloud(), home: cloud(), spin: d % 2 ? 0.11 : -0.09, tw: rnd(), mote: true });
   })();
 
   function smoothstep(t) {
@@ -166,6 +182,10 @@
     };
   }
 
+  function mix(a, b, t) {
+    return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t };
+  }
+
   function paintField(ctx, w, h, time, level) {
     ctx.clearRect(0, 0, w, h);
     ctx.lineCap = 'round';
@@ -175,79 +195,69 @@
     var voice = assistantLevel;
     var form = Math.min(1, gatherAmount(time) * (1 - voice * 0.15) + voice * 0.9);
     var breathe = 1 + Math.sin(time * 0.65) * 0.012 + level * 0.1 + voice * 0.04;
-    var R = Math.max(48, anchor.core * (1.22 + form * 0.08));
-    var nod = Math.sin(time * 0.23) * 0.18;
-    var haze = ctx.createRadialGradient(cx - R * 0.08, cy - R * 0.06, R * 0.05, cx, cy, R * 1.08);
-    haze.addColorStop(0, 'rgba(255, 236, 196, 0.42)');
-    haze.addColorStop(0.28, 'rgba(214, 146, 42, 0.16)');
-    haze.addColorStop(0.72, 'rgba(140, 78, 16, 0.08)');
-    haze.addColorStop(1, 'rgba(80, 40, 8, 0)');
+    var R = Math.max(48, anchor.core * 1.28);
+    var nod = Math.sin(time * 0.23) * 0.12;
+    var haze = ctx.createRadialGradient(cx - R * 0.06, cy - R * 0.04, R * 0.04, cx, cy, R * 1.05);
+    haze.addColorStop(0, 'rgba(255, 228, 180, ' + (0.16 + form * 0.12) + ')');
+    haze.addColorStop(0.45, 'rgba(180, 110, 28, ' + (0.05 + form * 0.06) + ')');
+    haze.addColorStop(1, 'rgba(60, 30, 8, 0)');
     ctx.fillStyle = haze;
     ctx.beginPath();
-    ctx.arc(cx, cy, R * 1.08, 0, 6.283185);
+    ctx.arc(cx, cy, R * 1.05, 0, 6.283185);
     ctx.fill();
-    var pieces = [];
-    shells.forEach(function (shell) {
-      var spin = time * shell.spin;
-      var keep = shell.keep + Math.round(form * 3);
-      var projected = [];
-      for (var i = 0; i < shell.pts.length; i++) projected.push(project(shell.pts[i], spin, nod, breathe, cx, cy, R));
-      for (var s = 0; s < projected.length; s++) {
-        if ((s % shell.gap) >= keep) continue;
-        var a = projected[s];
-        var b = projected[(s + 1) % projected.length];
-        var dist = Math.hypot(a.x - b.x, a.y - b.y);
-        if (dist < 1.5 || dist > R * 0.22) continue;
-        pieces.push({ a: a, b: b, z: (a.z + b.z) / 2, depth: (a.depth + b.depth) / 2, inner: shell.r < 0.5 });
-      }
-    });
-    pieces.sort(function (p, q) { return p.z - q.z; });
-    for (var n = 0; n < pieces.length; n++) {
-      var seg = pieces[n];
-      var alpha = (seg.inner ? 0.28 : 0.14) + seg.depth * (0.35 + form * 0.4);
-      ctx.strokeStyle = seg.depth > 0.62 ? 'rgba(255, 196, 90, ' + (alpha * 0.45) + ')' : 'rgba(140, 78, 18, ' + (alpha * 0.35) + ')';
-      ctx.lineWidth = seg.depth > 0.62 ? 3.2 : 1.8;
-      var mx0 = (seg.a.x + seg.b.x) / 2;
-      var my0 = (seg.a.y + seg.b.y) / 2;
-      var dx0 = mx0 - cx, dy0 = my0 - cy;
-      var len0 = Math.hypot(dx0, dy0) || 1;
-      var bow0 = Math.min(8, Math.hypot(seg.a.x - seg.b.x, seg.a.y - seg.b.y) * 0.4);
-      ctx.beginPath();
-      ctx.moveTo(seg.a.x, seg.a.y);
-      ctx.quadraticCurveTo(mx0 + dx0 / len0 * bow0, my0 + dy0 / len0 * bow0, seg.b.x, seg.b.y);
-      ctx.stroke();
-      ctx.strokeStyle = seg.depth > 0.62 ? 'rgba(255, 228, 170, ' + alpha + ')' : 'rgba(190, 120, 36, ' + (alpha * 0.85) + ')';
-      ctx.lineWidth = seg.depth > 0.62 ? 1.15 : 0.65;
-      var mx = (seg.a.x + seg.b.x) / 2;
-      var my = (seg.a.y + seg.b.y) / 2;
-      var dx = mx - cx, dy = my - cy;
-      var len = Math.hypot(dx, dy) || 1;
-      var bow = Math.min(7, Math.hypot(seg.a.x - seg.b.x, seg.a.y - seg.b.y) * 0.35);
+    var placed = [];
+    for (var i = 0; i < bodies.length; i++) {
+      var body = bodies[i];
+      var drift = {
+        x: body.free.x + Math.sin(time * 0.35 + body.tw * 6) * 0.05,
+        y: body.free.y + Math.cos(time * 0.28 + body.tw * 4) * 0.05,
+        z: body.free.z
+      };
+      placed.push(project(mix(drift, body.home, form), time * body.spin * (body.mote ? 1 : 0.35), nod, breathe, cx, cy, R));
+    }
+    var strokes = [];
+    function consider(a, b, kind) {
+      if (form < (kind === 'strut' ? 0.45 : 0.22)) return;
+      var pa = placed[a], pb = placed[b];
+      var dist = Math.hypot(pa.x - pb.x, pa.y - pb.y);
+      var limit = kind === 'strut' ? R * 0.85 : R * 0.18;
+      if (dist < 1.2 || dist > limit) return;
+      strokes.push({ a: pa, b: pb, z: (pa.z + pb.z) / 2, depth: (pa.depth + pb.depth) / 2, kind: kind });
+    }
+    for (var s = 0; s < links.length; s++) consider(links[s].a, links[s].b, links[s].inner ? 'inner' : 'shell');
+    for (s = 0; s < struts.length; s++) consider(struts[s].a, struts[s].b, 'strut');
+    strokes.sort(function (p, q) { return p.z - q.z; });
+    for (var n = 0; n < strokes.length; n++) {
+      var seg = strokes[n];
+      var alpha = form * (0.2 + seg.depth * 0.65);
+      if (seg.kind === 'strut') alpha *= 0.85;
+      ctx.strokeStyle = seg.depth > 0.58 ? 'rgba(255, 220, 160, ' + alpha + ')' : 'rgba(150, 86, 20, ' + (alpha * 0.7) + ')';
+      ctx.lineWidth = seg.kind === 'strut' ? 1.4 : (seg.depth > 0.58 ? 1.8 : 0.8);
+      var mx = (seg.a.x + seg.b.x) / 2, my = (seg.a.y + seg.b.y) / 2;
+      var dx = mx - cx, dy = my - cy, len = Math.hypot(dx, dy) || 1;
+      var bow = seg.kind === 'strut' ? 0 : Math.min(6, Math.hypot(seg.a.x - seg.b.x, seg.a.y - seg.b.y) * 0.3);
       ctx.beginPath();
       ctx.moveTo(seg.a.x, seg.a.y);
       ctx.quadraticCurveTo(mx + dx / len * bow, my + dy / len * bow, seg.b.x, seg.b.y);
       ctx.stroke();
     }
-    for (var d = 0; d < dust.length; d++) {
-      var mote = dust[d];
-      var loose = 1 + (1 - form) * 0.06 * Math.sin(time * 0.8 + mote.tw * 6.28);
-      var p = project({ x: mote.x * loose, y: mote.y * loose, z: mote.z * loose }, time * mote.spin, nod, breathe, cx, cy, R);
-      var glitter = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(time * 1.7 + mote.tw * 12));
-      var bright = p.depth > 0.7 && glitter > 0.72;
-      ctx.fillStyle = bright ? 'rgba(255, 248, 230, ' + (0.55 + p.depth * 0.4) + ')' : 'rgba(214, 154, 52, ' + (0.12 + p.depth * 0.4 * glitter) + ')';
+    for (i = 0; i < placed.length; i++) {
+      var p = placed[i];
+      var bright = p.depth > 0.72;
+      ctx.fillStyle = bright ? 'rgba(255, 246, 224, ' + (0.45 + p.depth * 0.5) + ')' : 'rgba(206, 142, 42, ' + (0.15 + p.depth * 0.45) + ')';
       ctx.beginPath();
-      ctx.arc(p.x, p.y, bright ? 1.7 : 0.7 + p.depth, 0, 6.283185);
+      ctx.arc(p.x, p.y, (bright ? 1.8 : 0.9) * (0.7 + p.depth * 0.5), 0, 6.283185);
       ctx.fill();
     }
     var nx = cx - R * 0.04, ny = cy - R * 0.03;
-    var coreR = R * (0.11 + voice * 0.02);
+    var coreR = R * (0.1 + voice * 0.02);
     var nucleus = ctx.createRadialGradient(nx, ny, 0, nx, ny, coreR);
-    nucleus.addColorStop(0, 'rgba(255, 250, 240, 0.92)');
-    nucleus.addColorStop(0.45, 'rgba(255, 186, 70, 0.55)');
+    nucleus.addColorStop(0, 'rgba(255, 250, 240, 0.95)');
+    nucleus.addColorStop(0.5, 'rgba(255, 186, 70, 0.5)');
     nucleus.addColorStop(1, 'rgba(160, 90, 16, 0)');
     ctx.fillStyle = nucleus;
     ctx.beginPath();
-    ctx.ellipse(nx, ny, coreR * 1.2, coreR * 0.78, -0.5, 0, 6.283185);
+    ctx.ellipse(nx, ny, coreR * 1.15, coreR * 0.75, -0.45, 0, 6.283185);
     ctx.fill();
   }
 
