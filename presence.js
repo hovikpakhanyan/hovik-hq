@@ -74,97 +74,299 @@
   }
 
   var fieldTime = 0;
+  var glowCanvas = null;
+  var glowCtx = null;
   var micLevel = 0;
-  var dots = [];
-  for (var di = 0; di < 42; di++) dots.push({ a: Math.random() * 6.28, r: 0.34 + Math.random() * 0.58, s: 0.006 + Math.random() * 0.016, w: 0.6 + Math.random() * 1.6 });
+  var assistantLevel = 0;
+  var traces = [];
+  (function buildCircuit() {
+    function sph(lat, lon, r) {
+      var cl = Math.cos(lat);
+      return { x: cl * Math.cos(lon) * r, y: Math.sin(lat) * r, z: cl * Math.sin(lon) * r };
+    }
+    function push(kind, pts) {
+      var mid = pts[0];
+      traces.push({
+        pts: pts,
+        drift: {
+          x: Math.sin(mid.y * 9 + mid.x * 4) * 0.42,
+          y: Math.cos(mid.x * 7 + mid.z * 3) * 0.42,
+          z: Math.sin(mid.z * 5 + mid.y * 6) * 0.42
+        },
+        kind: kind,
+        heat: 0.5 + 0.5 * Math.sin(mid.x * 13 + mid.z * 9 + mid.y * 4)
+      });
+    }
+    var shells = [
+      { r: 0.99, lat0: 0.05, lon0: 0.2, step: 0.085, tilt: 0.14 },
+      { r: 0.88, lat0: -0.08, lon0: 0.55, step: 0.095, tilt: -0.2 },
+      { r: 0.74, lat0: 0.12, lon0: -0.35, step: 0.1, tilt: 0.26 },
+      { r: 0.52, lat0: -0.04, lon0: 1.1, step: 0.11, tilt: -0.1 }
+    ];
+    function tiltShell(p, ax) {
+      var c = Math.cos(ax), s = Math.sin(ax);
+      return { x: p.x, y: p.y * c - p.z * s, z: p.y * s + p.z * c };
+    }
+    var si, lat, lon, dLat, dLon, a, b, c, jitter, noise;
+    for (si = 0; si < shells.length; si++) {
+      var shell = shells[si];
+      for (lat = -1.15; lat <= 1.15; lat += shell.step) {
+        for (lon = 0; lon < 6.283185; lon += shell.step * 1.15) {
+          noise = Math.sin(lat * 6.5 + lon * 3.7 + si) * Math.cos(lon * 4.2 - lat * 5.1 + si);
+          if (noise > 0.62) continue;
+          if (noise < -0.72 && ((Math.round(lat * 10) + si) % 2 === 0)) continue;
+          jitter = 0.012 * Math.sin(lon * 11 + lat * 7);
+          var latJ = lat + shell.lat0 + jitter;
+          var lonJ = lon + shell.lon0 + jitter * 1.4;
+          var scale = 0.55 + 0.7 * (0.5 + 0.5 * noise);
+          dLat = 0.04 * scale;
+          dLon = (0.048 * scale) / Math.max(0.3, Math.cos(latJ));
+          var cell = (Math.round(lat * 17) + Math.round(lon * 11) + si) % 7;
+          a = tiltShell(sph(latJ, lonJ, shell.r), shell.tilt);
+          if (cell < 3) {
+            b = tiltShell(sph(latJ, lonJ + dLon, shell.r), shell.tilt);
+            push('dash', [a, b]);
+          } else if (cell < 5) {
+            b = tiltShell(sph(latJ + dLat, lonJ, shell.r), shell.tilt);
+            push('dash', [a, b]);
+          } else if (cell === 5) {
+            b = tiltShell(sph(latJ, lonJ + dLon * 0.75, shell.r), shell.tilt);
+            c = tiltShell(sph(latJ + dLat * 0.75, lonJ + dLon * 0.75, shell.r), shell.tilt);
+            push('elbow', [a, b, c]);
+          } else {
+            b = tiltShell(sph(latJ + dLat * 0.65, lonJ, shell.r), shell.tilt);
+            c = tiltShell(sph(latJ + dLat * 0.65, lonJ + dLon * 0.6, shell.r), shell.tilt);
+            push('step', [a, b, c]);
+          }
+        }
+      }
+    }
+    var bands = [0.55, 4.05];
+    for (var s = 0; s < 36; s++) {
+      var band = bands[s < 24 ? 0 : 1];
+      var spikeLon = band + (s % 8) * 0.07;
+      var spikeLat = -0.9 + (s % 6) * 0.28;
+      var reach = 1.22 + (s % 5) * 0.045;
+      push('strut', [sph(spikeLat, spikeLon, 0.94), sph(spikeLat, spikeLon, reach)]);
+    }
+  })();
+
+  function smoothstep(t) {
+    t = Math.max(0, Math.min(1, t));
+    return t * t * (3 - 2 * t);
+  }
+  function gatherAmount(time) {
+    var u = (time % 18) / 18;
+    if (u < 0.26) return 0;
+    if (u < 0.4) return smoothstep((u - 0.26) / 0.14);
+    if (u < 0.66) return 1;
+    if (u < 0.84) return 1 - smoothstep((u - 0.66) / 0.18);
+    return 0;
+  }
+  function rotY(p, a) {
+    var c = Math.cos(a), s = Math.sin(a);
+    return { x: p.x * c + p.z * s, y: p.y, z: -p.x * s + p.z * c };
+  }
+
+  function fieldAnchor(w, h) {
+    var canvas = document.getElementById('core-field');
+    var core = document.getElementById('command-core');
+    if (!canvas || !core) return { x: w * 0.5, y: h * 0.46, core: Math.min(w, h) * 0.16 };
+    var cr = canvas.getBoundingClientRect();
+    var br = core.getBoundingClientRect();
+    var sx = w / Math.max(1, cr.width);
+    var sy = h / Math.max(1, cr.height);
+    return {
+      x: (br.left + br.width / 2 - cr.left) * sx,
+      y: (br.top + br.height / 2 - cr.top) * sy,
+      core: Math.min(br.width, br.height) / 2 * sx
+    };
+  }
+
+  function project(p, spin, nod, breathe, cx, cy, R) {
+    var y1 = p.y * Math.cos(nod) - p.z * Math.sin(nod);
+    var z1 = p.y * Math.sin(nod) + p.z * Math.cos(nod);
+    var q = rotY({ x: p.x, y: y1, z: z1 }, spin);
+    var f = 2.15 / (2.35 + q.z);
+    return {
+      x: cx + q.x * f * R * breathe,
+      y: cy + q.y * f * R * breathe * 0.94,
+      z: q.z,
+      depth: (1.15 - q.z) / 2.3
+    };
+  }
 
   function paintField(ctx, w, h, time, level) {
+    ctx.globalCompositeOperation = 'source-over';
     ctx.clearRect(0, 0, w, h);
-    var cx = w / 2, cy = h / 2, R = Math.min(w, h) * 0.47;
-    var wash = ctx.createRadialGradient(cx, cy, R * 0.02, cx, cy, R);
-    wash.addColorStop(0, 'rgba(236, 255, 252, 0.95)');
-    wash.addColorStop(0.08, 'rgba(94, 234, 212, 0.45)');
-    wash.addColorStop(0.22, 'rgba(20, 70, 78, 0.18)');
-    wash.addColorStop(1, 'rgba(94, 234, 212, 0)');
-    ctx.fillStyle = wash;
-    ctx.beginPath();
-    ctx.arc(cx, cy, R, 0, 6.28);
-    ctx.fill();
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(time * 0.08);
-    for (var t = 0; t < 96; t++) {
-      var major = t % 8 === 0;
-      ctx.rotate((Math.PI * 2) / 96);
-      ctx.strokeStyle = major ? 'rgba(245, 201, 122, 0.72)' : 'rgba(94, 234, 212, 0.32)';
-      ctx.lineWidth = major ? 1.4 : 0.6;
-      ctx.beginPath();
-      ctx.moveTo(R * (major ? 0.78 : 0.86), 0);
-      ctx.lineTo(R * 0.96, 0);
-      ctx.stroke();
+    ctx.lineCap = 'butt';
+    ctx.lineJoin = 'miter';
+    var anchor = fieldAnchor(w, h);
+    var cx = anchor.x, cy = anchor.y;
+    var voice = assistantLevel;
+    var form = Math.min(1, gatherAmount(time) * (1 - voice * 0.15) + voice * 0.9);
+    var breathe = 1 + level * 0.06 + voice * 0.03;
+    var stageMin = Math.min(w, h);
+    var R = Math.min(stageMin * 0.4, Math.max(anchor.core * 1.5, stageMin * 0.34));
+    var nod = Math.sin(time * 0.2) * 0.08;
+    var spin = time * 0.18;
+    var slide = 1 - form;
+    var bins = [[], [], [], [], [], [], [], []];
+    var i, p, q, src, moved, depth, bin, len, radial;
+    for (i = 0; i < traces.length; i++) {
+      var trace = traces[i];
+      if (trace.kind === 'strut' && form < 0.5) continue;
+      var ax, ay, az, bx, by;
+      for (p = 0; p < trace.pts.length - 1; p++) {
+        src = trace.pts[p];
+        moved = { x: src.x + trace.drift.x * slide, y: src.y + trace.drift.y * slide, z: src.z + trace.drift.z * slide };
+        ax = project(moved, spin, nod, breathe, cx, cy, R);
+        src = trace.pts[p + 1];
+        moved = { x: src.x + trace.drift.x * slide, y: src.y + trace.drift.y * slide, z: src.z + trace.drift.z * slide };
+        q = project(moved, spin, nod, breathe, cx, cy, R);
+        len = Math.hypot(ax.x - q.x, ax.y - q.y);
+        if (len < 0.6 || len > (trace.kind === 'strut' ? 56 : 14)) continue;
+        depth = (ax.depth + q.depth) / 2;
+        radial = Math.hypot((ax.x + q.x) / 2 - cx, (ax.y + q.y) / 2 - cy) / R;
+        bin = Math.max(0, Math.min(7, Math.floor(depth * 7)));
+        if (trace.heat > 0.72) bin = Math.min(7, bin + 1);
+        else if (trace.heat < 0.28) bin = Math.max(0, bin - 1);
+        if (radial > 0.72 && radial < 1.05) bin = Math.min(7, bin + 2);
+        bins[bin].push(ax.x, ax.y, q.x, q.y);
+      }
     }
-    ctx.restore();
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(-time * 0.22);
-    ctx.strokeStyle = 'rgba(158, 240, 255, 0.28)';
-    ctx.lineWidth = 1;
-    for (var s = 0; s < 18; s++) {
-      ctx.rotate(Math.PI / 9);
-      ctx.beginPath();
-      ctx.moveTo(R * 0.2, 0);
-      ctx.lineTo(R * 0.7, 0);
-      ctx.stroke();
-    }
-    ctx.restore();
-    var arcs = [
-      { r: 0.96, span: 0.55, speed: 0.85, color: 'rgba(94,234,212,0.95)', width: 2.4, gap: 0.9 },
-      { r: 0.86, span: 1.15, speed: -0.55, color: 'rgba(210,255,250,0.8)', width: 1.5, gap: 1.35 },
-      { r: 0.74, span: 0.42, speed: 1.25, color: 'rgba(245,201,122,0.9)', width: 2, gap: 0.72 },
-      { r: 0.63, span: 1.8, speed: -0.95, color: 'rgba(94,234,212,0.7)', width: 3.2, gap: 2.2 },
-      { r: 0.5, span: 0.7, speed: 1.6, color: 'rgba(255,255,255,0.75)', width: 1.2, gap: 1.05 }
+    ctx.globalCompositeOperation = 'lighter';
+    var colors = [
+      'rgba(150, 42, 0, 0.55)',
+      'rgba(185, 55, 0, 0.6)',
+      'rgba(215, 75, 0, 0.68)',
+      'rgba(235, 100, 0, 0.75)',
+      'rgba(250, 130, 0, 0.82)',
+      'rgba(255, 160, 15, 0.88)',
+      'rgba(255, 190, 40, 0.92)',
+      'rgba(255, 220, 90, 0.96)'
     ];
-    arcs.forEach(function (arc, n) {
-      ctx.strokeStyle = arc.color;
-      ctx.lineWidth = arc.width;
-      var a0 = time * arc.speed + n * 0.4;
-      for (var k = 0; k < 3; k++) {
+    for (bin = 0; bin < 8; bin++) {
+      var batch = bins[bin];
+      if (!batch.length) continue;
+      ctx.beginPath();
+      for (i = 0; i < batch.length; i += 4) {
+        ctx.moveTo(batch[i], batch[i + 1]);
+        ctx.lineTo(batch[i + 2], batch[i + 3]);
+      }
+      ctx.strokeStyle = colors[bin];
+      ctx.lineWidth = bin > 5 ? 1.6 : 1.05;
+      ctx.stroke();
+    }
+    if (form > 0.45) {
+      var panels = [
+        { lat: -0.22, lon: 0.35, h: 0.28, w: 0.22 },
+        { lat: 0.18, lon: 1.7, h: 0.34, w: 0.16 },
+        { lat: -0.48, lon: 4.15, h: 0.22, w: 0.2 }
+      ];
+      ctx.lineWidth = 1.3;
+      for (i = 0; i < panels.length; i++) {
+        var panel = panels[i];
+        var rungs = [];
+        var rung;
+        for (rung = 0; rung <= 4; rung++) {
+          rungs.push([
+            project(sphLocal(panel.lat + panel.h * (rung / 4), panel.lon, 0.9), spin, nod, breathe, cx, cy, R),
+            project(sphLocal(panel.lat + panel.h * (rung / 4), panel.lon + panel.w, 0.9), spin, nod, breathe, cx, cy, R)
+          ]);
+        }
+        var sideA = rungs[0][0], sideB = rungs[4][0], sideC = rungs[4][1], sideD = rungs[0][1];
         ctx.beginPath();
-        var start = a0 + k * (arc.span + arc.gap);
-        ctx.arc(cx, cy, R * arc.r, start, start + arc.span);
+        ctx.moveTo(sideA.x, sideA.y);
+        ctx.lineTo(sideB.x, sideB.y);
+        ctx.lineTo(sideC.x, sideC.y);
+        ctx.lineTo(sideD.x, sideD.y);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(255, 150, 20, ' + ((form - 0.45) * 0.28) + ')';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255, 186, 40, 0.7)';
+        ctx.stroke();
+        ctx.beginPath();
+        for (rung = 1; rung < 4; rung++) {
+          ctx.moveTo(rungs[rung][0].x, rungs[rung][0].y);
+          ctx.lineTo(rungs[rung][1].x, rungs[rung][1].y);
+        }
         ctx.stroke();
       }
-    });
-    var amp = 6 + level * R * 0.22 + Math.sin(time * 2.2) * 4;
-    ctx.beginPath();
-    for (var i = 0; i <= 96; i++) {
-      var ang = (i / 96) * 6.28318;
-      var wave = Math.sin(ang * 7 - time * 3.4) * amp;
-      var rr = R * 0.36 + wave;
-      var x = cx + Math.cos(ang) * rr;
-      var y = cy + Math.sin(ang) * rr;
-      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     }
-    ctx.closePath();
-    ctx.strokeStyle = 'rgba(210, 255, 250, 0.85)';
-    ctx.lineWidth = 1.4;
-    ctx.stroke();
-    dots.forEach(function (d) {
-      var ang = d.a + time * d.s * (state === 'speaking' ? 2.4 : 1);
-      var rr = R * d.r;
-      ctx.fillStyle = 'rgba(226, 255, 250, 0.9)';
+    if (!glowCanvas) {
+      glowCanvas = document.createElement('canvas');
+      glowCtx = glowCanvas.getContext('2d', { alpha: true });
+    }
+    var gw = Math.max(2, w >> 2), gh = Math.max(2, h >> 2);
+    if (glowCanvas.width !== gw || glowCanvas.height !== gh) {
+      glowCanvas.width = gw;
+      glowCanvas.height = gh;
+    }
+    glowCtx.clearRect(0, 0, gw, gh);
+    glowCtx.drawImage(ctx.canvas, 0, 0, gw, gh);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.filter = 'blur(' + Math.max(8, Math.round(R * 0.045)) + 'px)';
+    ctx.drawImage(glowCanvas, 0, 0, w, h);
+    ctx.filter = 'none';
+    ctx.restore();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineWidth = 1.05;
+    for (bin = 0; bin < 3; bin++) {
+      var far = bins[bin];
+      if (!far.length) continue;
       ctx.beginPath();
-      ctx.arc(cx + Math.cos(ang) * rr, cy + Math.sin(ang) * rr * 0.92, d.w, 0, 6.28);
-      ctx.fill();
-    });
-    var nucleus = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 0.16);
-    nucleus.addColorStop(0, '#f4fffd');
-    nucleus.addColorStop(0.45, 'rgba(94,234,212,0.85)');
-    nucleus.addColorStop(1, 'rgba(94,234,212,0)');
+      for (i = 0; i < far.length; i += 4) {
+        ctx.moveTo(far[i], far[i + 1]);
+        ctx.lineTo(far[i + 2], far[i + 3]);
+      }
+      ctx.strokeStyle = colors[bin];
+      ctx.stroke();
+    }
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineWidth = 5;
+    var arcs = [
+      { ax: 0.55, ay: 0.15, r: 0.62, spin: -0.16, a0: 0.3, a1: 4.6 },
+      { ax: 1.15, ay: -0.45, r: 0.7, spin: 0.12, a0: 0.8, a1: 5.1 },
+      { ax: -0.25, ay: 0.85, r: 0.5, spin: 0.1, a0: 1.2, a1: 4.8 }
+    ];
+    for (i = 0; i < arcs.length; i++) {
+      var arc = arcs[i];
+      ctx.beginPath();
+      for (var s = 0; s <= 28; s++) {
+        var ang = arc.a0 + (arc.a1 - arc.a0) * (s / 28);
+        var pt = tiltLocal(Math.cos(ang) * arc.r, Math.sin(ang) * arc.r, 0, arc.ax, arc.ay);
+        var pr = project(pt, time * arc.spin, nod, breathe, cx, cy, R);
+        if (s === 0) ctx.moveTo(pr.x, pr.y); else ctx.lineTo(pr.x, pr.y);
+      }
+      ctx.strokeStyle = 'rgba(255, 196, 60, ' + (0.35 + form * 0.45) + ')';
+      ctx.stroke();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    var nx = cx - R * 0.02, ny = cy - R * 0.015;
+    var coreR = R * (0.075 + voice * 0.015);
+    var nucleus = ctx.createRadialGradient(nx, ny, coreR * 0.2, nx, ny, coreR);
+    nucleus.addColorStop(0, 'rgba(255, 255, 245, 0.98)');
+    nucleus.addColorStop(0.35, 'rgba(255, 210, 90, 0.85)');
+    nucleus.addColorStop(0.7, 'rgba(255, 140, 20, 0.35)');
+    nucleus.addColorStop(1, 'rgba(120, 50, 0, 0)');
     ctx.fillStyle = nucleus;
     ctx.beginPath();
-    ctx.arc(cx, cy, R * 0.16, 0, 6.28);
+    ctx.ellipse(nx, ny, coreR, coreR * 0.78, -0.35, 0, 6.283185);
     ctx.fill();
+  }
+
+  function sphLocal(lat, lon, r) {
+    var cl = Math.cos(lat);
+    return { x: cl * Math.cos(lon) * r, y: Math.sin(lat) * r, z: cl * Math.sin(lon) * r };
+  }
+  function tiltLocal(x, y, z, ax, ay) {
+    var cy = Math.cos(ax), sy = Math.sin(ax);
+    var cz = Math.cos(ay), sz = Math.sin(ay);
+    var y1 = y * cy - z * sy;
+    var z1 = y * sy + z * cy;
+    return { x: x * cz - z1 * sz, y: y1, z: x * sz + z1 * cz };
   }
 
   function loopParticles(canvas) {
@@ -172,11 +374,11 @@
     var ctx = canvas.getContext('2d');
     function frame(now) {
       fieldTime = (now || 0) / 1000;
-      paintField(ctx, canvas.width, canvas.height, reduced ? 0.8 : fieldTime, micLevel);
+      paintField(ctx, canvas.width, canvas.height, reduced ? 8 : fieldTime, micLevel);
       if (reduced || hiddenPause || batteryPause || !particlesOn) { raf = 0; return; }
       raf = requestAnimationFrame(frame);
     }
-    if (reduced || hiddenPause || batteryPause) { paintField(ctx, canvas.width, canvas.height, 0.8, 0); return; }
+    if (reduced || hiddenPause || batteryPause) { paintField(ctx, canvas.width, canvas.height, 8, 0); return; }
     if (!raf) raf = requestAnimationFrame(frame);
   }
 
@@ -254,7 +456,8 @@
           var v = (data[i] - 128) / 128;
           sum += v * v;
         }
-        micLevel = Math.min(1, Math.sqrt(sum / data.length) * 4);
+        var heard = Math.min(1, Math.sqrt(sum / data.length) * 4);
+        micLevel += (heard - micLevel) * 0.18;
         requestAnimationFrame(pump);
       })();
       acquired.getTracks().forEach(function (t) {
@@ -274,10 +477,14 @@
     }
   }
 
-  function markSpeaking(on) {
-    if (on) setState('speaking', 'A local chat message was sent. The motion is not an assistant voice.');
-    else if (!stream) setState('idle', 'Rings move on their own. The microphone is off. This is not a voice assistant and nothing is recorded.');
-    else setState('listening', 'Level follows this browser microphone only. Nothing is recorded, uploaded, or sent to a voice assistant.');
+  function markSpeaking() {}
+  function setAssistantEnergy(level) {
+    assistantLevel = Math.max(0, Math.min(1, Number(level) || 0));
+    if (reduced || hiddenPause || batteryPause || !particlesOn) {
+      var canvas = document.getElementById('core-field');
+      if (!canvas) return;
+      paintField(canvas.getContext('2d'), canvas.width, canvas.height, 8, micLevel);
+    }
   }
 
   function boot() {
@@ -315,7 +522,13 @@
     startField();
   }
 
-  root.HQPresence = { release: release, markSpeaking: markSpeaking, boot: boot, getState: function () { return state; } };
+  root.HQPresence = {
+    release: release,
+    markSpeaking: markSpeaking,
+    setAssistantEnergy: setAssistantEnergy,
+    boot: boot,
+    getState: function () { return state; }
+  };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
 })(typeof globalThis !== 'undefined' ? globalThis : this);
