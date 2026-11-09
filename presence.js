@@ -76,73 +76,60 @@
   var fieldTime = 0;
   var micLevel = 0;
   var assistantLevel = 0;
-  var wisps = [];
-  (function buildSphere() {
-    var seed = 11;
-    function rnd() {
-      seed = (seed * 48271) % 2147483647;
-      return seed / 2147483647;
+  var traces = [];
+  (function buildCircuit() {
+    function sph(lat, lon, r) {
+      var cl = Math.cos(lat);
+      return { x: cl * Math.cos(lon) * r, y: Math.sin(lat) * r, z: cl * Math.sin(lon) * r };
     }
-    function unit() {
-      var z = rnd() * 2 - 1;
-      var t = rnd() * 6.283185;
-      var r = Math.sqrt(Math.max(0, 1 - z * z));
-      return { x: Math.cos(t) * r, y: z, z: Math.sin(t) * r };
-    }
-    function perp(n) {
-      var a = Math.abs(n.x) < 0.8 ? { x: 1, y: 0, z: 0 } : { x: 0, y: 1, z: 0 };
-      var x = a.y * n.z - a.z * n.y;
-      var y = a.z * n.x - a.x * n.z;
-      var z = a.x * n.y - a.y * n.x;
-      var len = Math.hypot(x, y, z) || 1;
-      return { x: x / len, y: y / len, z: z / len };
-    }
-    function cross(a, b) {
-      return {
-        x: a.y * b.z - a.z * b.y,
-        y: a.z * b.x - a.x * b.z,
-        z: a.x * b.y - a.y * b.x
-      };
-    }
-    function addArc(kind, radius, arc, steps) {
-      var n = unit();
-      if (kind === 'shell' && n.x + n.y * 0.4 < 0 && rnd() < 0.45) return;
-      var u = perp(n);
-      var v = cross(n, u);
-      var phase = rnd() * 6.283185;
-      var pts = [];
-      for (var i = 0; i < steps; i++) {
-        var a = phase + (i / (steps - 1) - 0.5) * arc;
-        var c = Math.cos(a), s = Math.sin(a);
-        pts.push({
-          x: (n.x * c + u.x * s) * radius,
-          y: (n.y * c + u.y * s) * radius,
-          z: (n.z * c + u.z * s) * radius
-        });
-      }
-      wisps.push({
+    function push(kind, pts) {
+      var mid = pts[0];
+      traces.push({
         pts: pts,
-        drift: { x: (rnd() - 0.5) * 0.55, y: (rnd() - 0.5) * 0.55, z: (rnd() - 0.5) * 0.55 },
-        spin: rnd() < 0.5 ? 0.22 : -0.17,
+        drift: {
+          x: Math.sin(mid.y * 9 + mid.x * 4) * 0.42,
+          y: Math.cos(mid.x * 7 + mid.z * 3) * 0.42,
+          z: Math.sin(mid.z * 5 + mid.y * 6) * 0.42
+        },
         kind: kind
       });
     }
-    var i;
-    for (i = 0; i < 170; i++) addArc('shell', 0.84 + rnd() * 0.16, 0.95 + rnd() * 0.7, 7);
-    for (i = 0; i < 55; i++) addArc('inner', 0.3 + rnd() * 0.22, 0.8 + rnd() * 0.55, 6);
-    for (i = 0; i < 22; i++) {
-      var n = unit();
-      if (n.y < -0.2 && rnd() < 0.5) continue;
-      var inner = 0.72, outer = 1.16 + rnd() * 0.12;
-      wisps.push({
-        pts: [
-          { x: n.x * inner, y: n.y * inner, z: n.z * inner },
-          { x: n.x * outer, y: n.y * outer, z: n.z * outer }
-        ],
-        drift: { x: (rnd() - 0.5) * 0.6, y: (rnd() - 0.5) * 0.6, z: (rnd() - 0.5) * 0.6 },
-        spin: 0.12,
-        kind: 'strut'
-      });
+    var shells = [0.98, 0.9, 0.8];
+    var si, lat, lon, dLat, dLon, a, b, c;
+    for (si = 0; si < shells.length; si++) {
+      var radius = shells[si];
+      for (lat = -1.15; lat <= 1.15; lat += 0.09) {
+        dLat = 0.045;
+        dLon = 0.055 / Math.max(0.28, Math.cos(lat));
+        for (lon = 0; lon < 6.283185; lon += 0.105) {
+          var cell = ((Math.round(lat * 20) + Math.round(lon * 12) + si * 3) % 9);
+          if (cell === 0 || cell === 1) continue;
+          if (lon > 2.2 && lon < 3.5 && lat > -0.2) continue;
+          a = sph(lat, lon, radius);
+          if (cell === 2 || cell === 3) {
+            b = sph(lat, lon + dLon, radius);
+            push('dash', [a, b]);
+          } else if (cell === 4 || cell === 5) {
+            b = sph(lat + dLat, lon, radius);
+            push('dash', [a, b]);
+          } else if (cell === 6) {
+            b = sph(lat, lon + dLon * 0.8, radius);
+            c = sph(lat + dLat * 0.8, lon + dLon * 0.8, radius);
+            push('elbow', [a, b, c]);
+          } else {
+            b = sph(lat + dLat * 0.7, lon, radius);
+            c = sph(lat + dLat * 0.7, lon + dLon * 0.65, radius);
+            push('step', [a, b, c]);
+          }
+        }
+      }
+    }
+    for (var s = 0; s < 18; s++) {
+      var spikeLon = 0.35 + (s % 6) * 0.12;
+      var spikeLat = -0.7 + Math.floor(s / 6) * 0.45;
+      var inner = sph(spikeLat, spikeLon, 0.98);
+      var outer = sph(spikeLat, spikeLon, 1.16);
+      push('strut', [inner, outer]);
     }
   })();
 
@@ -187,90 +174,134 @@
       x: cx + q.x * f * R * breathe,
       y: cy + q.y * f * R * breathe * 0.94,
       z: q.z,
-      depth: (q.z + 1.2) / 2.3
+      depth: (1.15 - q.z) / 2.3
     };
   }
 
   function paintField(ctx, w, h, time, level) {
+    ctx.globalCompositeOperation = 'source-over';
     ctx.clearRect(0, 0, w, h);
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
+    ctx.lineCap = 'butt';
+    ctx.lineJoin = 'miter';
     var anchor = fieldAnchor(w, h);
     var cx = anchor.x, cy = anchor.y;
     var voice = assistantLevel;
     var form = Math.min(1, gatherAmount(time) * (1 - voice * 0.15) + voice * 0.9);
-    var breathe = 1 + Math.sin(time * 0.6) * 0.01 + level * 0.08 + voice * 0.04;
+    var breathe = 1 + level * 0.06 + voice * 0.03;
     var stageMin = Math.min(w, h);
     var R = Math.min(stageMin * 0.4, Math.max(anchor.core * 1.5, stageMin * 0.34));
-    var nod = Math.sin(time * 0.2) * 0.1;
-    var haze = ctx.createRadialGradient(cx - R * 0.05, cy - R * 0.04, R * 0.02, cx, cy, R);
-    haze.addColorStop(0, 'rgba(255, 236, 200, 0.28)');
-    haze.addColorStop(0.35, 'rgba(210, 140, 40, 0.1)');
-    haze.addColorStop(0.78, 'rgba(120, 64, 12, 0.05)');
-    haze.addColorStop(1, 'rgba(40, 20, 4, 0)');
-    ctx.fillStyle = haze;
-    ctx.beginPath();
-    ctx.arc(cx, cy, R, 0, 6.283185);
-    ctx.fill();
-    var draw = [];
-    for (var i = 0; i < wisps.length; i++) {
-      var wisp = wisps[i];
-      if (wisp.kind === 'strut' && form < 0.4) continue;
-      var slide = 1 - form;
-      var pts = [];
-      var zSum = 0;
-      for (var p = 0; p < wisp.pts.length; p++) {
-        var src = wisp.pts[p];
-        var moved = {
-          x: src.x + wisp.drift.x * slide,
-          y: src.y + wisp.drift.y * slide,
-          z: src.z + wisp.drift.z * slide
-        };
-        var q = project(moved, time * wisp.spin, nod, breathe, cx, cy, R);
-        pts.push(q);
-        zSum += q.z;
+    var nod = Math.sin(time * 0.2) * 0.08;
+    var spin = time * 0.18;
+    var slide = 1 - form;
+    var bins = [[], [], [], [], [], [], [], []];
+    var i, p, q, src, moved, depth, bin, len, radial;
+    for (i = 0; i < traces.length; i++) {
+      var trace = traces[i];
+      if (trace.kind === 'strut' && form < 0.5) continue;
+      var ax, ay, az, bx, by;
+      for (p = 0; p < trace.pts.length - 1; p++) {
+        src = trace.pts[p];
+        moved = { x: src.x + trace.drift.x * slide, y: src.y + trace.drift.y * slide, z: src.z + trace.drift.z * slide };
+        ax = project(moved, spin, nod, breathe, cx, cy, R);
+        src = trace.pts[p + 1];
+        moved = { x: src.x + trace.drift.x * slide, y: src.y + trace.drift.y * slide, z: src.z + trace.drift.z * slide };
+        q = project(moved, spin, nod, breathe, cx, cy, R);
+        len = Math.hypot(ax.x - q.x, ax.y - q.y);
+        if (len < 0.6 || len > 14) continue;
+        depth = (ax.depth + q.depth) / 2;
+        radial = Math.hypot((ax.x + q.x) / 2 - cx, (ax.y + q.y) / 2 - cy) / R;
+        bin = Math.max(0, Math.min(7, Math.floor(depth * 7)));
+        if (radial > 0.72 && radial < 1.02) bin = Math.min(7, bin + 2);
+        bins[bin].push(ax.x, ax.y, q.x, q.y);
       }
-      draw.push({ pts: pts, z: zSum / pts.length, kind: wisp.kind });
     }
-    draw.sort(function (a, b) { return a.z - b.z; });
-    for (i = 0; i < draw.length; i++) {
-      var item = draw[i];
-      var depth = 0;
-      for (p = 0; p < item.pts.length; p++) depth += item.pts[p].depth;
-      depth /= item.pts.length;
-      if (item.kind !== 'strut') {
-        var dot = item.pts[0];
-        ctx.fillStyle = depth > 0.62 ? 'rgba(255, 244, 214, 0.85)' : 'rgba(196, 130, 40, 0.45)';
-        ctx.beginPath();
-        ctx.arc(dot.x, dot.y, depth > 0.62 ? 1.5 : 0.8, 0, 6.283185);
-        ctx.fill();
-      }
-      var fade = item.kind === 'strut' ? Math.max(0, (form - 0.55) / 0.45) : Math.max(0, (form - 0.08) / 0.92);
-      if (fade < 0.04) continue;
-      var alpha = ((item.kind === 'inner' ? 0.5 : 0.34) + depth * 0.55) * fade;
-      var near = depth > 0.6;
-      ctx.strokeStyle = near ? 'rgba(255, 220, 150, ' + alpha + ')' : 'rgba(140, 78, 18, ' + (alpha * 0.65) + ')';
-      ctx.lineWidth = item.kind === 'strut' ? 1.3 : (near ? 1.7 : 0.7);
+    ctx.globalCompositeOperation = 'lighter';
+    var colors = [
+      'rgba(160, 60, 0, 0.35)',
+      'rgba(190, 80, 0, 0.4)',
+      'rgba(220, 110, 10, 0.5)',
+      'rgba(240, 140, 20, 0.6)',
+      'rgba(255, 170, 30, 0.7)',
+      'rgba(255, 200, 60, 0.8)',
+      'rgba(255, 230, 120, 0.9)',
+      'rgba(255, 250, 220, 0.95)'
+    ];
+    for (bin = 0; bin < 8; bin++) {
+      var batch = bins[bin];
+      if (!batch.length) continue;
       ctx.beginPath();
-      ctx.moveTo(item.pts[0].x, item.pts[0].y);
-      if (item.pts.length === 2) ctx.lineTo(item.pts[1].x, item.pts[1].y);
-      else {
-        for (p = 1; p < item.pts.length - 1; p++) ctx.quadraticCurveTo(item.pts[p].x, item.pts[p].y, (item.pts[p].x + item.pts[p + 1].x) / 2, (item.pts[p].y + item.pts[p + 1].y) / 2);
-        var last = item.pts[item.pts.length - 1];
-        ctx.lineTo(last.x, last.y);
+      for (i = 0; i < batch.length; i += 4) {
+        ctx.moveTo(batch[i], batch[i + 1]);
+        ctx.lineTo(batch[i + 2], batch[i + 3]);
       }
+      ctx.strokeStyle = colors[bin];
+      ctx.lineWidth = bin > 5 ? 1.6 : 1.05;
       ctx.stroke();
     }
-    var nx = cx - R * 0.03, ny = cy - R * 0.02;
-    var coreR = R * (0.09 + voice * 0.02);
-    var nucleus = ctx.createRadialGradient(nx, ny, 0, nx, ny, coreR);
-    nucleus.addColorStop(0, 'rgba(255, 250, 240, 0.95)');
-    nucleus.addColorStop(0.42, 'rgba(255, 190, 80, 0.55)');
-    nucleus.addColorStop(1, 'rgba(150, 80, 12, 0)');
+    ctx.globalCompositeOperation = 'source-over';
+    if (form > 0.45) {
+      var panels = [[-0.15, 0.4], [0.45, 1.6], [-0.55, 4.2]];
+      ctx.fillStyle = 'rgba(255, 170, 40, ' + ((form - 0.45) * 0.22) + ')';
+      for (i = 0; i < panels.length; i++) {
+        var lat0 = panels[i][0], lon0 = panels[i][1];
+        var corners = [
+          project(sphLocal(lat0, lon0, 0.99), spin, nod, breathe, cx, cy, R),
+          project(sphLocal(lat0 + 0.18, lon0, 0.99), spin, nod, breathe, cx, cy, R),
+          project(sphLocal(lat0 + 0.18, lon0 + 0.16, 0.99), spin, nod, breathe, cx, cy, R),
+          project(sphLocal(lat0, lon0 + 0.16, 0.99), spin, nod, breathe, cx, cy, R)
+        ];
+        ctx.beginPath();
+        ctx.moveTo(corners[0].x, corners[0].y);
+        ctx.lineTo(corners[1].x, corners[1].y);
+        ctx.lineTo(corners[2].x, corners[2].y);
+        ctx.lineTo(corners[3].x, corners[3].y);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineWidth = 2.4;
+    var arcs = [
+      { ax: 0.4, ay: 0.2, r: 0.36, spin: -0.25, a0: 0.2, a1: 4.2 },
+      { ax: 1.1, ay: -0.3, r: 0.3, spin: 0.2, a0: 1.1, a1: 5.0 },
+      { ax: -0.2, ay: 0.9, r: 0.24, spin: 0.15, a0: 0.6, a1: 4.4 }
+    ];
+    for (i = 0; i < arcs.length; i++) {
+      var arc = arcs[i];
+      ctx.beginPath();
+      for (var s = 0; s <= 28; s++) {
+        var ang = arc.a0 + (arc.a1 - arc.a0) * (s / 28);
+        var pt = tiltLocal(Math.cos(ang) * arc.r, Math.sin(ang) * arc.r, 0, arc.ax, arc.ay);
+        var pr = project(pt, time * arc.spin, nod, breathe, cx, cy, R);
+        if (s === 0) ctx.moveTo(pr.x, pr.y); else ctx.lineTo(pr.x, pr.y);
+      }
+      ctx.strokeStyle = 'rgba(255, 196, 60, ' + (0.35 + form * 0.45) + ')';
+      ctx.stroke();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    var nx = cx - R * 0.02, ny = cy - R * 0.015;
+    var coreR = R * (0.075 + voice * 0.015);
+    var nucleus = ctx.createRadialGradient(nx, ny, coreR * 0.2, nx, ny, coreR);
+    nucleus.addColorStop(0, 'rgba(255, 255, 245, 0.98)');
+    nucleus.addColorStop(0.35, 'rgba(255, 210, 90, 0.85)');
+    nucleus.addColorStop(0.7, 'rgba(255, 140, 20, 0.35)');
+    nucleus.addColorStop(1, 'rgba(120, 50, 0, 0)');
     ctx.fillStyle = nucleus;
     ctx.beginPath();
-    ctx.ellipse(nx, ny, coreR, coreR * 0.72, -0.4, 0, 6.283185);
+    ctx.ellipse(nx, ny, coreR, coreR * 0.78, -0.35, 0, 6.283185);
     ctx.fill();
+  }
+
+  function sphLocal(lat, lon, r) {
+    var cl = Math.cos(lat);
+    return { x: cl * Math.cos(lon) * r, y: Math.sin(lat) * r, z: cl * Math.sin(lon) * r };
+  }
+  function tiltLocal(x, y, z, ax, ay) {
+    var cy = Math.cos(ax), sy = Math.sin(ax);
+    var cz = Math.cos(ay), sz = Math.sin(ay);
+    var y1 = y * cy - z * sy;
+    var z1 = y * sy + z * cy;
+    return { x: x * cz - z1 * sz, y: y1, z: x * sz + z1 * cz };
   }
 
   function loopParticles(canvas) {
