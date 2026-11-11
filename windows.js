@@ -1,5 +1,5 @@
 (function (root) {
-  var TITLES = { agents: 'Agents', chat: 'Chat', listings: 'Listings', escrows: 'Pipeline', tasks: 'Tasks', markets: 'Markets' };
+  var TITLES = { agents: 'Agents', chat: 'Chat', listings: 'Listings', tasks: 'Tasks', markets: 'Markets' };
   var homes = new Map();
   var wins = new Map();
   var zTop = 1;
@@ -244,7 +244,6 @@
       ['.agents .panel-label', 'agents'],
       ['.chat-head', 'chat'],
       ['#listings-panel h4', 'listings'],
-      ['#escrows-panel h4', 'escrows'],
       ['#tasks-panel h4', 'tasks'],
       ['#markets-panel h4', 'markets']
     ].forEach(function (pair) {

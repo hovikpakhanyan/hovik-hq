@@ -18,7 +18,7 @@ export function consentPage(fields) {
 </head>
 <body>
 <h1>Allow HQ research publishing</h1>
-<p>The redirect below is the only destination this consent will use. Approving it lets that client publish research notes and read publication status.</p>
+<p>The redirect below is the only destination this consent will use. Approving it lets that client publish research notes, publish listing, pipeline, and escrow records, and read publication status.</p>
 <p>This does not approve trades, messages, deletes, credential changes, or any other action.</p>
 <p>Redirect: ${escapeHtml(fields.redirect_uri || '')}</p>
 <p>Scopes: ${escapeHtml(fields.scope || '')}</p>
