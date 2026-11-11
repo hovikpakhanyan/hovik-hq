@@ -9,6 +9,7 @@ import { EventEmitter } from 'node:events';
 import { forbiddenKey, httpsOk, preflight } from '../publisher/validate.mjs';
 import { createIssuer } from '../publisher/oauth.mjs';
 import { handleMcp } from '../publisher/mcp.mjs';
+import { dealPreflight } from '../publisher/deals.mjs';
 
 const ui = { URL, Date, Number, String };
 vm.runInNewContext(fs.readFileSync(new URL('../research-ui.js', import.meta.url), 'utf8'), ui);
@@ -169,4 +170,75 @@ test('research view escapes text and withholds bad links', () => {
   assert.equal(HQResearch.renderCard({ configured: true, authFailed: true }).includes('session was rejected'), true);
   assert.equal(HQResearch.renderCard({ configured: true, authFailed: true }).includes('not set up'), false);
   assert.equal(HQResearch.renderCard({ configured: true, readFailed: true }).includes('could not be read'), true);
+  const emptyFeed = HQResearch.renderWorkspace({ configured: true, holdings: [], findings: [], lastGood: null });
+  assert.equal(emptyFeed.includes('Feed not connected'), true);
+  assert.equal(emptyFeed.includes('Holdings'), true);
+  assert.equal(emptyFeed.includes('Advice / research'), true);
+  assert.equal(emptyFeed.includes('$'), false);
+  assert.equal(HQResearch.renderWorkspace({ configured: true, authFailed: true, holdings: [], findings: [] }).includes('Feed not connected'), false);
+  assert.equal(HQResearch.renderWorkspace({ configured: true, authFailed: true, holdings: [], findings: [] }).includes('session was rejected'), true);
+});
+
+test('publish_deal uses the existing publish scope and does not accept a quote', async () => {
+  const issuer = createIssuer({ clientId: 'hq-client', redirectUris: ['https://connector.example/callback'], bootstrapCode: 'owner-bootstrap', resource: 'https://publisher.example' });
+  const challenge = createHash('sha256').update('verifier-value').digest('base64url');
+  const issued = await issuer.token({
+    grant_type: 'authorization_code',
+    client_id: 'hq-client',
+    redirect_uri: 'https://connector.example/callback',
+    code_verifier: 'verifier-value',
+    code: new URL((await issuer.authorize({
+      client_id: 'hq-client', redirect_uri: 'https://connector.example/callback', code_challenge: challenge,
+      code_challenge_method: 'S256', scope: 'research.publish research.status.read', bootstrap: 'owner-bootstrap'
+    })).redirect).searchParams.get('code')
+  });
+  const payload = {
+    schema_version: 1,
+    record_id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+    external_key: 'thread-1',
+    kind: 'pipeline',
+    lane: 'pipeline',
+    title: 'Record',
+    status_label: 'Pipeline',
+    updated_at: '2026-11-11T18:00:00Z'
+  };
+  assert.equal(dealPreflight({ ...payload, price: 1 }).ok, false);
+  let seen = null;
+  const ok = await handleMcp({
+    auth: issuer,
+    db: {
+      publish() { throw new Error('research writer'); },
+      publishDeal(body) { seen = body; return { ok: true, replay: false }; },
+      dealStatus() { return { ok: true, configured: true, counts: { listing: 0, pipeline: 0, escrow: 0 } }; }
+    },
+    body: { jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'publish_deal', arguments: payload } },
+    authorization: 'Bearer ' + issued.access_token
+  });
+  assert.equal(ok.status, 200);
+  assert.equal(seen.external_key, 'thread-1');
+  const quoted = await handleMcp({
+    auth: issuer,
+    db: { publishDeal() { throw new Error('should not write'); } },
+    body: { jsonrpc: '2.0', id: 5, method: 'tools/call', params: { name: 'publish_deal', arguments: { ...payload, quote: 12 } } },
+    authorization: 'Bearer ' + issued.access_token
+  });
+  assert.equal(quoted.status, 200);
+  assert.match(JSON.stringify(quoted.body), /forbidden_field/);
+  const readOnly = await issuer.token({
+    grant_type: 'authorization_code',
+    client_id: 'hq-client',
+    redirect_uri: 'https://connector.example/callback',
+    code_verifier: 'verifier-value',
+    code: new URL((await issuer.authorize({
+      client_id: 'hq-client', redirect_uri: 'https://connector.example/callback', code_challenge: challenge,
+      code_challenge_method: 'S256', scope: 'research.status.read', bootstrap: 'owner-bootstrap'
+    })).redirect).searchParams.get('code')
+  });
+  const denied = await handleMcp({
+    auth: issuer,
+    db: { publishDeal() { throw new Error('should not write'); } },
+    body: { jsonrpc: '2.0', id: 6, method: 'tools/call', params: { name: 'publish_deal', arguments: payload } },
+    authorization: 'Bearer ' + readOnly.access_token
+  });
+  assert.equal(denied.status, 403);
 });

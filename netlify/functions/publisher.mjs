@@ -118,7 +118,9 @@ async function route(req) {
       auth: issuer,
       db: {
         publish: (payload) => getStore().query('select hq_private.publish_stock_research($1::jsonb) as result', [payload]).then((r) => r.rows[0].result),
-        status: (id) => getStore().query('select hq_private.research_status($1::uuid) as result', [id]).then((r) => r.rows[0].result)
+        status: (id) => getStore().query('select hq_private.research_status($1::uuid) as result', [id]).then((r) => r.rows[0].result),
+        publishDeal: (payload) => getStore().query('select hq_private.publish_deal($1::jsonb) as result', [payload]).then((r) => r.rows[0].result),
+        dealStatus: (key) => getStore().query('select hq_private.deal_status($1::text) as result', [key]).then((r) => r.rows[0].result)
       },
       body: taken.raw,
       authorization: req.headers.get('authorization') || ''
