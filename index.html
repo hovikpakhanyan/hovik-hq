@@ -319,18 +319,26 @@ button.row { width: 100%; background: none; border: 0; border-bottom: 1px solid 
 .markets-orb-col canvas { width: 100%; height: auto; aspect-ratio: 1; display: block; }
 .orb-caption { margin-top: 6px; text-align: center; font-size: 9px; letter-spacing: 0.14em; color: var(--cyan); }
 .chart-col, .hero-side, .mkt-block { min-width: 0; }
-.chart-frame { position: relative; height: 168px; border: 1px solid rgba(228,196,140,0.4); border-radius: 12px; overflow: hidden; background: rgba(8,7,5,0.78); }
+.chart-frame { position: relative; height: 168px; border: 1px solid rgba(228,196,140,0.55); border-radius: 12px; overflow: hidden; background: rgba(8,7,5,0.82); box-shadow: inset 0 0 40px rgba(196,146,64,0.08); }
+.chart-frame::before, .chart-frame::after { content: ""; position: absolute; width: 16px; height: 16px; border: 1px solid rgba(255,214,140,0.85); z-index: 2; pointer-events: none; }
+.chart-frame::before { top: 6px; left: 6px; border-right: 0; border-bottom: 0; }
+.chart-frame::after { right: 6px; bottom: 6px; border-left: 0; border-top: 0; }
 .chart-frame canvas { width: 100%; height: 100%; display: block; }
 .chart-caption { position: absolute; inset: 18px; display: grid; align-content: center; justify-items: center; text-align: center; gap: 6px; pointer-events: none; }
 .chart-caption p { color: var(--text-dim); font-size: 12.5px; line-height: 1.4; }
 .hero-side { grid-column: 1 / -1; }
-.alloc-banner, .mkt-block { border: 1px solid rgba(228,196,140,0.28); border-radius: 12px; background: rgba(12,10,8,0.88); padding: 10px 12px; }
+.alloc-banner, .mkt-block, .hud-entry { border: 1px solid rgba(228,196,140,0.4); border-radius: 12px; background: rgba(12,10,8,0.9); padding: 10px 12px; box-shadow: 0 0 0 1px rgba(196,146,64,0.05), 0 10px 28px rgba(0,0,0,0.25); }
 .alloc-banner { color: var(--gold); font-size: 13px; line-height: 1.45; margin: 12px 0; }
-.mkt-block h3, .chart-col h2 { font-family: var(--disp); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--gold); font-weight: 500; margin-bottom: 8px; }
+.mkt-block h3, .chart-col h2, .hud-entry h3 { font-family: var(--disp); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); font-weight: 500; margin-bottom: 8px; }
+.track-item { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 8px; align-items: start; padding: 8px 0; border-bottom: 1px solid rgba(228,196,140,0.16); }
+.track-item::before { content: ""; width: 10px; height: 10px; margin-top: 4px; border-radius: 50%; background: #f0d7a4; box-shadow: 0 0 10px rgba(240,180,60,0.8); }
 .mkt-block p, .chart-col p { color: var(--text-dim); font-size: 12.5px; line-height: 1.45; }
 .markets-sections { display: grid; gap: 10px; }
-.track-list { display: grid; gap: 6px; }
-.track-item { display: grid; gap: 2px; padding: 6px 0; border-bottom: 1px solid var(--border); min-width: 0; }
+.track-list { display: grid; gap: 0; }
+.track-copy { display: grid; gap: 2px; min-width: 0; }
+.hud-entry { margin: 12px 0; }
+.mkt-block { position: relative; padding-left: 16px; }
+.mkt-block::before { content: ""; position: absolute; left: 8px; top: 12px; bottom: 12px; width: 2px; background: linear-gradient(#f0d7a4, rgba(240,180,60,0)); }
 .track-item strong { font-size: 13px; color: var(--text); }
 .track-item span, .plan-doc p, .plan-doc li { color: var(--text-dim); font-size: 12.5px; line-height: 1.45; }
 .plan-doc h2, .plan-doc h3 { font-family: var(--disp); color: #f6ecd6; font-weight: 500; margin: 14px 0 6px; overflow-wrap: anywhere; }
@@ -369,27 +377,17 @@ button.row { width: 100%; background: none; border: 0; border-bottom: 1px solid 
 .station span { display: block; color: var(--text-dim); font-size: 12px; }
 .lane-list { padding: 10px 12px; }
 .floor-stage { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; max-width: 1080px; margin: 0 auto; align-items: stretch; }
-.bot-card { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 10px; padding: 12px; }
+.bot-card { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 10px; padding: 12px; align-items: center; }
 .bot-card[data-id="re"] { grid-column: 2; grid-row: 1; }
 .bot-card[data-id="inbox"] { grid-column: 1; grid-row: 2; }
 .bot-card[data-id="conductor"] { grid-column: 2; grid-row: 2; }
 .bot-card[data-id="markets"] { grid-column: 3; grid-row: 2; }
 .bot-card[data-id="life"] { grid-column: 2; grid-row: 3; }
 .bot-card.is-focus { border-color: #f6e2b0; box-shadow: 0 0 0 1px rgba(246,226,176,0.4); }
-.sprite { width: 72px; height: 72px; border-radius: 10px; position: relative; border: 1px solid rgba(240,200,120,0.75);
-  background:
-    linear-gradient(rgba(240,180,60,0.45) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(240,180,60,0.45) 1px, transparent 1px),
-    radial-gradient(circle at 50% 42%, #5a3d14, #140f0a 72%);
-  background-size: 6px 6px, 6px 6px, auto;
-}
-.sprite .visor { position: absolute; left: 12px; right: 12px; top: 28px; height: 8px; background: #f6e2b0; box-shadow: 0 0 12px #e4b15a; }
-.sprite[data-sprite="inbox"] .visor { height: 14px; top: 24px; clip-path: polygon(0 30%, 50% 70%, 100% 30%, 100% 100%, 0 100%); }
-.sprite[data-sprite="markets"] { border-radius: 50%; }
-.sprite[data-sprite="life"] .visor { border-radius: 8px; height: 12px; }
-.sprite.conductor { width: 92px; height: 92px; border-radius: 50%; }
-.sprite.conductor .visor { top: 40px; }
-.sprite .port { position: absolute; inset: 8px; border: 1px dashed rgba(255,210,120,0.7); border-radius: inherit; }
+.sprite { width: 84px; height: 104px; position: relative; border: 0; background: none; }
+.sprite svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.sprite.conductor { width: 112px; height: 136px; }
+.bot-card.is-hub { border-color: rgba(246,226,176,0.7); box-shadow: 0 0 24px rgba(196,146,64,0.18); }
 .bot-copy { min-width: 0; }
 .bot-copy h3 { font-family: var(--disp); font-size: 16px; font-weight: 500; color: #f6ecd6; overflow-wrap: anywhere; }
 .bot-copy .role, .bot-copy p, .from-hub { color: var(--text-dim); font-size: 12.5px; line-height: 1.4; margin-top: 3px; }
@@ -399,9 +397,8 @@ button.row { width: 100%; background: none; border: 0; border-bottom: 1px solid 
   .page-columns, .metric-row, .floor-stage { display: flex; flex-direction: column; }
   .bot-card, .bot-card[data-id] { grid-column: auto; grid-row: auto; }
   .bot-card[data-id="conductor"] { order: -1; }
-  .sprite, .sprite.conductor { width: 64px; height: 64px; }
-  .sprite.conductor .visor { top: 26px; }
-  .bot-card { grid-template-columns: 64px minmax(0, 1fr); }
+  .sprite, .sprite.conductor { width: 72px; height: 88px; }
+  .bot-card { grid-template-columns: 72px minmax(0, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) {
   .core-ring, .core-inner, .core-text span, .core.speaking, .live-dot { animation: none !important; }
@@ -634,6 +631,7 @@ button.row { width: 100%; background: none; border: 0; border-bottom: 1px solid 
     <div class="top-meta"><span class="page-clock">--:--</span></div>
   </header>
   <div class="page-stage">
+    <canvas id="markets-field" width="800" height="600" aria-hidden="true"></canvas>
     <div class="page-body">
       <div class="markets-hero">
         <aside class="markets-orb-col">
@@ -655,6 +653,8 @@ button.row { width: 100%; background: none; border: 0; border-bottom: 1px solid 
           Paper trading sits inside the 40% sleeve. A quarterly rebalance is a check, not an automatic trade. Not connected to Fidelity.
         </aside>
       </div>
+      <section class="hud-entry">
+      <h3>Manual / projected</h3>
       <div class="task-form" id="figure-form">
         <label class="field">Tracked name
           <select id="figure-symbol"></select>
@@ -668,6 +668,7 @@ button.row { width: 100%; background: none; border: 0; border-bottom: 1px solid 
         <button type="button" class="text-btn" id="figure-save">Save figures</button>
         <p class="save-note" id="figure-note">Blank means no figure. Saved numbers are labeled MANUAL or PROJECTED. This is not Fidelity.</p>
       </div>
+      </section>
       <div class="markets-sections">
         <section class="mkt-block span-2">
           <h3>Rules</h3>
@@ -1185,14 +1186,56 @@ function renderAgents() {
 
 function openAgent(id) { openAgentsPage(id); }
 function closeSheet() { document.getElementById('overlay').classList.remove('open'); }
+function portrait(kind) {
+  const svg = (body) => '<svg viewBox="0 0 80 104" aria-hidden="true">' + body + '</svg>';
+  const shoulders = '<path d="M2 104 L14 74 H66 L78 104 Z" fill="#1c140c" stroke="#e4c48a" stroke-width="1.5"/>' +
+    '<path d="M33 74 V64 H47 V74" fill="#2c1e12" stroke="#e4c48a"/>';
+  const visor = '<rect x="22" y="44" width="36" height="8" rx="1.5" fill="#fff3c4"/>';
+  if (kind === 'conductor') {
+    return svg(shoulders +
+      '<path d="M14 66 C14 22 66 22 66 66 V72 H14 Z" fill="#100c08" stroke="#f6e2b0" stroke-width="1.8"/>' +
+      '<path d="M28 24 L40 8 L52 24" fill="none" stroke="#f0d7a4" stroke-width="1.6"/>' +
+      '<path d="M20 30 L8 12 M60 30 L72 12" stroke="#f0d7a4" stroke-width="1.4"/>' +
+      visor +
+      '<circle cx="40" cy="88" r="8" fill="none" stroke="#f0d7a4" stroke-width="1.5"/>' +
+      '<circle cx="40" cy="88" r="3.5" fill="#fff3c4"/>');
+  }
+  if (kind === 're') {
+    return svg(shoulders +
+      '<path d="M16 68 L16 36 L40 16 L64 36 V68 Z" fill="#120e0a" stroke="#f0d7a4" stroke-width="1.7"/>' +
+      '<path d="M28 22 H52 V30 H28 Z" fill="#1a120b" stroke="#e4c48a"/>' +
+      visor +
+      '<path d="M26 84 H54 M26 90 H54 M26 96 H46" stroke="#f0d7a4" stroke-width="1.5"/>');
+  }
+  if (kind === 'inbox') {
+    return svg(shoulders +
+      '<path d="M16 68 V30 Q40 14 64 30 V68 Z" fill="#120e0a" stroke="#f0d7a4" stroke-width="1.7"/>' +
+      '<path d="M20 36 L40 52 L60 36 V46 L40 60 L20 46 Z" fill="#3a2a14" stroke="#fff3c4" stroke-width="1.3"/>' +
+      '<path d="M24 86 H56" stroke="#f0d7a4" stroke-width="1.5"/>');
+  }
+  if (kind === 'markets') {
+    return svg(shoulders +
+      '<circle cx="40" cy="40" r="24" fill="#100c08" stroke="#f0d7a4" stroke-width="1.7"/>' +
+      '<circle cx="40" cy="40" r="14" fill="none" stroke="#e4c48a" stroke-width="1.2"/>' +
+      '<path d="M40 10 V20 M62 22 L70 12" stroke="#f0d7a4" stroke-width="1.4"/>' +
+      '<circle cx="70" cy="12" r="2.2" fill="#fff3c4"/>' +
+      '<rect x="26" y="36" width="28" height="7" rx="1.5" fill="#fff3c4"/>');
+  }
+  return svg(shoulders +
+    '<ellipse cx="40" cy="42" rx="22" ry="26" fill="#120e0a" stroke="#f0d7a4" stroke-width="1.7"/>' +
+    '<rect x="24" y="40" width="12" height="6" rx="2" fill="#fff3c4"/>' +
+    '<rect x="44" y="40" width="12" height="6" rx="2" fill="#fff3c4"/>' +
+    '<rect x="32" y="82" width="16" height="16" rx="2" fill="none" stroke="#f0d7a4"/>' +
+    '<path d="M32 88 H48 M40 82 V98" stroke="#f0d7a4" stroke-width="1.2"/>');
+}
 function renderAgentFloor(focusId) {
   const host = document.getElementById('agent-floor-cards');
   if (!host) return;
-  const conductor = '<article class="bot-card is-hub" data-id="conductor"><div class="sprite conductor" aria-hidden="true"><i class="visor"></i><i class="port"></i></div><div class="bot-copy"><h3>Conductor</h3><div class="role">Delegation hub</div><div class="agent-status">No live status</div><p>Conductor sits in the middle and delegates to the roster on this page. No job feed is stored for Conductor, so this is not a live heartbeat.</p></div></article>';
+  const conductor = '<article class="bot-card is-hub" data-id="conductor"><div class="sprite conductor" aria-hidden="true">' + portrait('conductor') + '</div><div class="bot-copy"><h3>Conductor</h3><div class="role">Delegation hub</div><div class="agent-status">No live status</div><p>Conductor sits in the middle and delegates to the roster on this page. No job feed is stored for Conductor, so this is not a live heartbeat.</p></div></article>';
   host.innerHTML = conductor + AGENTS.map(a => {
     const job = a.detail ? esc(a.detail) : 'No job description on file.';
     const status = a.status ? esc(a.status) : 'Unknown';
-    return '<article class="bot-card' + (focusId === a.id ? ' is-focus' : '') + '" data-id="' + esc(a.id) + '"><div class="sprite" data-sprite="' + esc(a.id) + '" aria-hidden="true"><i class="visor"></i></div><div class="bot-copy"><h3>' + esc(a.name) + '</h3><div class="role">' + esc(a.role) + '</div><div class="agent-status">' + status + '</div><p>' + job + '</p><p class="from-hub">Shown under Conductor</p></div></article>';
+    return '<article class="bot-card' + (focusId === a.id ? ' is-focus' : '') + '" data-id="' + esc(a.id) + '"><div class="sprite" data-sprite="' + esc(a.id) + '" aria-hidden="true">' + portrait(a.id) + '</div><div class="bot-copy"><h3>' + esc(a.name) + '</h3><div class="role">' + esc(a.role) + '</div><div class="agent-status">' + status + '</div><p>' + job + '</p><p class="from-hub">Shown under Conductor</p></div></article>';
   }).join('');
 }
 function motionOff() {
@@ -1260,6 +1303,7 @@ function paintPages(time) {
   const t = typeof time === 'number' ? time / 1000 : 1;
   paintCircuit(document.getElementById('book-field'), t);
   paintCircuit(document.getElementById('agent-floor'), t);
+  paintCircuit(document.getElementById('markets-field'), t);
   paintOrb(document.getElementById('markets-orb'), t);
   paintTrackingChart();
 }
@@ -1503,7 +1547,7 @@ function renderHoldingsBoard() {
 function renderTrackingList() {
   const host = document.getElementById('tracking-list');
   if (!host) return;
-  host.innerHTML = TRACKED.map(row => '<div class="track-item"><strong>' + esc(row.symbol) + '</strong><span>' + esc(row.note) + '</span></div>').join('');
+  host.innerHTML = TRACKED.map(row => '<div class="track-item"><div class="track-copy"><strong>' + esc(row.symbol) + '</strong><span>' + esc(row.note) + '</span></div></div>').join('');
 }
 function ensureFigureSelect() {
   const sel = document.getElementById('figure-symbol');
