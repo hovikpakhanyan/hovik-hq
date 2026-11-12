@@ -319,18 +319,26 @@ button.row { width: 100%; background: none; border: 0; border-bottom: 1px solid 
 .markets-orb-col canvas { width: 100%; height: auto; aspect-ratio: 1; display: block; }
 .orb-caption { margin-top: 6px; text-align: center; font-size: 9px; letter-spacing: 0.14em; color: var(--cyan); }
 .chart-col, .hero-side, .mkt-block { min-width: 0; }
-.chart-frame { position: relative; height: 168px; border: 1px solid rgba(228,196,140,0.4); border-radius: 12px; overflow: hidden; background: rgba(8,7,5,0.78); }
+.chart-frame { position: relative; height: 168px; border: 1px solid rgba(228,196,140,0.55); border-radius: 12px; overflow: hidden; background: rgba(8,7,5,0.82); box-shadow: inset 0 0 40px rgba(196,146,64,0.08); }
+.chart-frame::before, .chart-frame::after { content: ""; position: absolute; width: 16px; height: 16px; border: 1px solid rgba(255,214,140,0.85); z-index: 2; pointer-events: none; }
+.chart-frame::before { top: 6px; left: 6px; border-right: 0; border-bottom: 0; }
+.chart-frame::after { right: 6px; bottom: 6px; border-left: 0; border-top: 0; }
 .chart-frame canvas { width: 100%; height: 100%; display: block; }
 .chart-caption { position: absolute; inset: 18px; display: grid; align-content: center; justify-items: center; text-align: center; gap: 6px; pointer-events: none; }
 .chart-caption p { color: var(--text-dim); font-size: 12.5px; line-height: 1.4; }
 .hero-side { grid-column: 1 / -1; }
-.alloc-banner, .mkt-block { border: 1px solid rgba(228,196,140,0.28); border-radius: 12px; background: rgba(12,10,8,0.88); padding: 10px 12px; }
+.alloc-banner, .mkt-block, .hud-entry { border: 1px solid rgba(228,196,140,0.4); border-radius: 12px; background: rgba(12,10,8,0.9); padding: 10px 12px; box-shadow: 0 0 0 1px rgba(196,146,64,0.05), 0 10px 28px rgba(0,0,0,0.25); }
 .alloc-banner { color: var(--gold); font-size: 13px; line-height: 1.45; margin: 12px 0; }
-.mkt-block h3, .chart-col h2 { font-family: var(--disp); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--gold); font-weight: 500; margin-bottom: 8px; }
+.mkt-block h3, .chart-col h2, .hud-entry h3 { font-family: var(--disp); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); font-weight: 500; margin-bottom: 8px; }
+.track-item { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 8px; align-items: start; padding: 8px 0; border-bottom: 1px solid rgba(228,196,140,0.16); }
+.track-item::before { content: ""; width: 10px; height: 10px; margin-top: 4px; border-radius: 50%; background: #f0d7a4; box-shadow: 0 0 10px rgba(240,180,60,0.8); }
 .mkt-block p, .chart-col p { color: var(--text-dim); font-size: 12.5px; line-height: 1.45; }
 .markets-sections { display: grid; gap: 10px; }
-.track-list { display: grid; gap: 6px; }
-.track-item { display: grid; gap: 2px; padding: 6px 0; border-bottom: 1px solid var(--border); min-width: 0; }
+.track-list { display: grid; gap: 0; }
+.track-copy { display: grid; gap: 2px; min-width: 0; }
+.hud-entry { margin: 12px 0; }
+.mkt-block { position: relative; padding-left: 16px; }
+.mkt-block::before { content: ""; position: absolute; left: 8px; top: 12px; bottom: 12px; width: 2px; background: linear-gradient(#f0d7a4, rgba(240,180,60,0)); }
 .track-item strong { font-size: 13px; color: var(--text); }
 .track-item span, .plan-doc p, .plan-doc li { color: var(--text-dim); font-size: 12.5px; line-height: 1.45; }
 .plan-doc h2, .plan-doc h3 { font-family: var(--disp); color: #f6ecd6; font-weight: 500; margin: 14px 0 6px; overflow-wrap: anywhere; }
@@ -368,43 +376,67 @@ button.row { width: 100%; background: none; border: 0; border-bottom: 1px solid 
 .station strong { display: block; font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
 .station span { display: block; color: var(--text-dim); font-size: 12px; }
 .lane-list { padding: 10px 12px; }
-.floor-stage { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; max-width: 1080px; margin: 0 auto; align-items: stretch; }
-.bot-card { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 10px; padding: 12px; }
-.bot-card[data-id="re"] { grid-column: 2; grid-row: 1; }
-.bot-card[data-id="inbox"] { grid-column: 1; grid-row: 2; }
-.bot-card[data-id="conductor"] { grid-column: 2; grid-row: 2; }
-.bot-card[data-id="markets"] { grid-column: 3; grid-row: 2; }
-.bot-card[data-id="life"] { grid-column: 2; grid-row: 3; }
-.bot-card.is-focus { border-color: #f6e2b0; box-shadow: 0 0 0 1px rgba(246,226,176,0.4); }
-.sprite { width: 72px; height: 72px; border-radius: 10px; position: relative; border: 1px solid rgba(240,200,120,0.75);
-  background:
-    linear-gradient(rgba(240,180,60,0.45) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(240,180,60,0.45) 1px, transparent 1px),
-    radial-gradient(circle at 50% 42%, #5a3d14, #140f0a 72%);
-  background-size: 6px 6px, 6px 6px, auto;
+#page-agents .page-stage { background: #070d16; }
+#page-agents #agent-floor { display: none; }
+.office-room { position: relative; height: auto; min-height: 0; overflow: visible; background: none; border: 0; }
+.floor-stage { position: relative; width: 100%; aspect-ratio: 16 / 9; margin: 0 auto; }
+.floor-plate { width: 100%; height: 100%; display: block; object-fit: fill; border-radius: 10px; }
+.floor-plate-tall { display: none; }
+.floor-streams { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; mix-blend-mode: screen; }
+.streams-tall { display: none; }
+.floor-streams .stream { fill: none; stroke-width: 2; stroke-linecap: round; stroke-dasharray: 10 42; animation: flow 3.6s linear infinite; vector-effect: non-scaling-stroke; }
+.stream-green { stroke: #7dffe0; }
+.stream-amber { stroke: #ffc56a; }
+.stream-cyan { stroke: #b6f3ff; }
+.hub-glow { position: absolute; left: 50%; top: 29%; width: 16%; aspect-ratio: 1; transform: translate(-50%, -50%); pointer-events: none; border-radius: 50%; background: radial-gradient(circle, rgba(170,240,255,0.28), rgba(40,140,255,0.05) 58%, transparent 72%); mix-blend-mode: screen; animation: hubPulse 5s ease-in-out infinite; }
+@keyframes hubPulse { 50% { opacity: 0.55; } }
+@keyframes flow { to { stroke-dashoffset: -104; } }
+.seat { position: absolute; z-index: 2; margin: 0; padding: 0; border: 0; background: transparent; cursor: pointer; color: #f4fbff; }
+.seat-research { left: 7%; top: 18%; width: 22%; height: 28%; --glow: rgba(80,255,170,0.9); }
+.seat-deployer { left: 72%; top: 18%; width: 22%; height: 28%; --glow: rgba(255,186,70,0.9); }
+.seat-conductor { left: 16%; top: 52%; width: 26%; height: 32%; --glow: rgba(90,220,255,0.95); }
+.seat-name { position: absolute; left: 50%; top: 0; transform: translate(-50%, -120%); white-space: nowrap; font-family: Inter, system-ui, sans-serif; font-size: clamp(10px, 1.15vw, 13px); line-height: 1.2; letter-spacing: 0.04em; text-transform: uppercase; color: #f4fbff; background: rgba(4,10,18,0.72); border-radius: 999px; padding: 1px 6px; text-shadow: 0 1px 2px #000; pointer-events: none; }
+.seat.is-open { box-shadow: inset 0 0 0 1px var(--glow), 0 0 14px var(--glow); }
+#page-agents .page-note { font-family: Inter, system-ui, sans-serif; font-size: 13px; line-height: 1.5; letter-spacing: 0; word-spacing: normal; font-kerning: normal; max-width: 36rem; }
+.bot-panel { position: relative; z-index: 4; margin-top: 10px; max-height: 46dvh; overflow: auto; background: rgba(12,10,8,0.94); border: 1px solid rgba(228,196,140,0.45); border-radius: 12px; padding: 12px; min-width: 0; }
+.bot-panel[hidden] { display: none !important; }
+.bot-panel .module-bar { position: static; background: transparent; }
+.bot-panel h2 { font-family: var(--disp); font-size: 18px; font-weight: 500; color: #f6ecd6; min-width: 0; }
+.bot-panel p, .bot-panel .save-note { overflow-wrap: anywhere; }
+.bot-panel .row { flex-direction: column; align-items: flex-start; gap: 2px; }
+.bot-panel textarea { width: 100%; min-height: 88px; }
+@media (min-width: 1001px) {
+  .office-layout { position: relative; }
+  .office-layout.has-panel .office-room { margin-right: min(380px, 34vw); }
+  .bot-panel { position: absolute; right: 0; top: 0; width: min(360px, 32vw); max-height: min(68vh, 640px); margin-top: 0; }
 }
-.sprite .visor { position: absolute; left: 12px; right: 12px; top: 28px; height: 8px; background: #f6e2b0; box-shadow: 0 0 12px #e4b15a; }
-.sprite[data-sprite="inbox"] .visor { height: 14px; top: 24px; clip-path: polygon(0 30%, 50% 70%, 100% 30%, 100% 100%, 0 100%); }
-.sprite[data-sprite="markets"] { border-radius: 50%; }
-.sprite[data-sprite="life"] .visor { border-radius: 8px; height: 12px; }
-.sprite.conductor { width: 92px; height: 92px; border-radius: 50%; }
-.sprite.conductor .visor { top: 40px; }
-.sprite .port { position: absolute; inset: 8px; border: 1px dashed rgba(255,210,120,0.7); border-radius: inherit; }
 .bot-copy { min-width: 0; }
 .bot-copy h3 { font-family: var(--disp); font-size: 16px; font-weight: 500; color: #f6ecd6; overflow-wrap: anywhere; }
 .bot-copy .role, .bot-copy p, .from-hub { color: var(--text-dim); font-size: 12.5px; line-height: 1.4; margin-top: 3px; }
 .bot-copy .agent-status { margin: 4px 0 0; color: var(--gold); }
 .from-hub { letter-spacing: 0.08em; text-transform: uppercase; font-size: 10px; color: var(--cyan); }
+.rules-tuck { margin-top: 12px; }
+.rules-tuck summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; color: var(--gold); letter-spacing: 0.12em; text-transform: uppercase; font-size: 11px; font-family: var(--disp); }
+.agent-status.is-unknown { color: var(--gold); }
 @media (max-width: 1000px) {
-  .page-columns, .metric-row, .floor-stage { display: flex; flex-direction: column; }
-  .bot-card, .bot-card[data-id] { grid-column: auto; grid-row: auto; }
-  .bot-card[data-id="conductor"] { order: -1; }
-  .sprite, .sprite.conductor { width: 64px; height: 64px; }
-  .sprite.conductor .visor { top: 26px; }
-  .bot-card { grid-template-columns: 64px minmax(0, 1fr); }
+  .page-columns, .metric-row { display: flex; flex-direction: column; }
+  #page-agents .floor-scroll { display: flex; flex-direction: column; }
+  #page-agents .office-layout { flex: 1 0 auto; display: flex; flex-direction: column; justify-content: flex-start; min-width: 0; }
+  #page-agents .page-note { font-size: 12.5px; margin-bottom: 8px; }
+  .floor-stage { aspect-ratio: 9 / 16; width: min(100%, calc((100dvh - 128px) * 9 / 16)); }
+  .floor-plate-wide, .streams-wide { display: none; }
+  .floor-plate-tall { display: block; }
+  .seat-name { font-size: 10px; letter-spacing: 0.02em; padding: 1px 5px; }
+  .seat-research { left: 1%; top: 18%; width: 24%; height: 18%; }
+  .seat-deployer { left: 74%; top: 18%; width: 25%; height: 18%; }
+  .seat-conductor { left: 28%; top: 46%; width: 44%; height: 24%; }
+  .hub-glow { top: 31%; width: 24%; }
+  #page-agents .office-layout.has-panel .floor-stage { width: min(100%, 56vw); }
+  .bot-panel { position: relative; right: auto; top: auto; width: 100%; max-height: none; margin-top: 8px; overflow: visible; }
+  .bot-panel textarea { min-height: 72px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .core-ring, .core-inner, .core-text span, .core.speaking, .live-dot { animation: none !important; }
+  .core-ring, .core-inner, .core-text span, .core.speaking, .live-dot, .hub-glow, .floor-streams .stream { animation: none !important; }
 }
 
 /* PROPERTY DETAIL MODAL */
@@ -622,8 +654,25 @@ button.row { width: 100%; background: none; border: 0; border-bottom: 1px solid 
   <div class="page-stage">
     <canvas id="agent-floor" width="800" height="600" aria-hidden="true"></canvas>
     <div class="floor-scroll">
-      <p class="page-note">Statuses are the roster notes stored on this page, not a live heartbeat.</p>
-      <div class="floor-stage" id="agent-floor-cards"></div>
+      <p class="page-note">Notes you type stay on this device. They are not a live reply.</p>
+      <div class="office-layout">
+        <div class="office-room" id="office-floor"></div>
+        <aside id="bot-panel" class="bot-panel" hidden>
+          <div class="module-bar">
+            <button type="button" id="bot-panel-close">Close</button>
+            <h2 id="bot-panel-name">Bot</h2>
+          </div>
+          <p id="bot-panel-role" class="role"></p>
+          <p id="bot-panel-job"></p>
+          <p class="agent-status is-unknown">No live status</p>
+          <label class="field">Note for Conductor
+            <textarea id="bot-compose" maxlength="2000" placeholder="Type a note. It stays on this device until Conductor is connected."></textarea>
+          </label>
+          <button type="button" class="text-btn" id="bot-send">Send</button>
+          <p class="save-note" id="bot-send-note"></p>
+          <div id="bot-outbox"></div>
+        </aside>
+      </div>
     </div>
   </div>
 </section>
@@ -634,6 +683,7 @@ button.row { width: 100%; background: none; border: 0; border-bottom: 1px solid 
     <div class="top-meta"><span class="page-clock">--:--</span></div>
   </header>
   <div class="page-stage">
+    <canvas id="markets-field" width="800" height="600" aria-hidden="true"></canvas>
     <div class="page-body">
       <div class="markets-hero">
         <aside class="markets-orb-col">
@@ -651,35 +701,30 @@ button.row { width: 100%; background: none; border: 0; border-bottom: 1px solid 
           </div>
         </section>
         <aside class="hero-side alloc-banner">
-          <strong>60% quality-core / 40% high-upside.</strong>
-          Paper trading sits inside the 40% sleeve. A quarterly rebalance is a check, not an automatic trade. Not connected to Fidelity.
+          <strong>Not a live quote.</strong>
+          Not connected to Fidelity. The chart stays empty until a manual or projected figure is entered on this device.
         </aside>
       </div>
-      <div class="task-form" id="figure-form">
-        <label class="field">Tracked name
-          <select id="figure-symbol"></select>
-        </label>
-        <label class="field">Manual figure
-          <input id="figure-manual" inputmode="decimal" placeholder="Not entered" autocomplete="off">
-        </label>
-        <label class="field">Projected figure
-          <input id="figure-projected" inputmode="decimal" placeholder="Not entered" autocomplete="off">
-        </label>
-        <button type="button" class="text-btn" id="figure-save">Save figures</button>
-        <p class="save-note" id="figure-note">Blank means no figure. Saved numbers are labeled MANUAL or PROJECTED. This is not Fidelity.</p>
-      </div>
       <div class="markets-sections">
-        <section class="mkt-block span-2">
-          <h3>Rules</h3>
-          <div class="plan-doc" id="plan-rules"><p>Loading the investment plan…</p></div>
-        </section>
         <section class="mkt-block" id="holdings-board">
           <h3>Holdings</h3>
           <p>No position sizes on file. Not connected to Fidelity. Nothing here is a live balance.</p>
         </section>
         <section class="mkt-block">
-          <h3>Tracking</h3>
+          <h3>Stocks being tracked</h3>
           <div class="track-list" id="tracking-list"></div>
+        </section>
+        <section class="mkt-block">
+          <h3>News</h3>
+          <div class="feed-empty">
+            <p class="feed-title">No news connected</p>
+            <p>Weekday research still arrives in the stock-research chat until a secure publisher is connected. Nothing on this page is auto-published.</p>
+          </div>
+          <button type="button" class="text-btn" id="open-research-page">Open research notes</button>
+        </section>
+        <section class="mkt-block">
+          <h3>Suggestions</h3>
+          <p class="feed-empty">No suggestions yet. This is not advice and not a generated pick.</p>
         </section>
         <section class="mkt-block" id="paper-board">
           <h3>Paper trading</h3>
@@ -702,15 +747,28 @@ button.row { width: 100%; background: none; border: 0; border-bottom: 1px solid 
           <button type="button" class="text-btn" id="paper-add">Add rehearsal</button>
           <p class="save-note" id="paper-note">A starting virtual balance is not assumed. Amounts you type are labeled MANUAL.</p>
         </section>
-        <section class="mkt-block">
-          <h3>News</h3>
-          <div class="feed-empty">
-            <p class="feed-title">No news connected</p>
-            <p>Weekday research still arrives in the stock-research chat until a secure publisher is connected. Nothing on this page is auto-published.</p>
-          </div>
-          <button type="button" class="text-btn" id="open-research-page">Open research notes</button>
-        </section>
       </div>
+      <section class="hud-entry">
+        <h3>Manual / projected</h3>
+        <div class="task-form" id="figure-form">
+          <label class="field">Tracked name
+            <select id="figure-symbol"></select>
+          </label>
+          <label class="field">Manual figure
+            <input id="figure-manual" inputmode="decimal" placeholder="Not entered" autocomplete="off">
+          </label>
+          <label class="field">Projected figure
+            <input id="figure-projected" inputmode="decimal" placeholder="Not entered" autocomplete="off">
+          </label>
+          <button type="button" class="text-btn" id="figure-save">Save figures</button>
+          <p class="save-note" id="figure-note">Blank means no figure. Saved numbers are labeled MANUAL or PROJECTED. This is not Fidelity.</p>
+        </div>
+      </section>
+      <details class="rules-tuck mkt-block">
+        <summary>Rules · 60/40 plan</summary>
+        <p>60% quality-core / 40% high-upside. Paper trading sits inside the 40% sleeve. A quarterly rebalance is a check, not an automatic trade. Not connected to Fidelity.</p>
+        <div class="plan-doc" id="plan-rules"><p>Loading the investment plan…</p></div>
+      </details>
     </div>
   </div>
 </section>
@@ -1163,12 +1221,12 @@ async function loadData() {
 }
 
 // ── Agents ──
-const AGENTS = [
-  { id: 're', name: 'RE Ops', role: 'Listings & pipeline', color: '#f5c97a', status: 'Idle', detail: 'Monitors Follow Up Boss and listing activity.' },
-  { id: 'inbox', name: 'Inbox', role: 'Email filter', color: '#5eead4', status: 'Waiting', detail: 'Ready to watch Gmail once connected.' },
-  { id: 'markets', name: 'Signal', role: 'X & markets', color: '#93c5fd', status: 'Idle', detail: 'Research notes, when published, open from Markets. This panel does not quote prices or send orders.' },
-  { id: 'life', name: 'Life', role: 'Family & calendar', color: '#6ee7b7', status: 'Idle', detail: 'Tracks family schedule and personal follow-ups.' }
+const OFFICE = [
+  { id: '1a4d30cc-d5e0-4ab7-955d-68239fbe4974', key: 'conductor', name: 'Conductor', role: 'Delegates', job: 'Sits at the front station on this command floor. Notes you type are queued for Conductor. No live reply is connected.' },
+  { id: '6f32561d-95e6-4677-9136-8afa66fdddff', key: 'research', name: 'New Bot', role: 'Investments, research, and stock work', job: 'Investments, research, and stock work. This figure does not quote prices.' },
+  { id: 'fe79067c-3356-4ef8-90dc-45c919731803', key: 'deployer', name: 'HQ Deployer', role: 'HQ repo and Netlify deploy', job: 'HQ repository and Netlify deploy. One deployer is on this command floor.' }
 ];
+const AGENTS = OFFICE.map(bot => ({ id: bot.id, name: bot.name, role: bot.role, color: '#f0d7a4', status: 'No live status', detail: bot.job }));
 
 function renderAgents() {
   document.getElementById('agent-list').innerHTML = AGENTS.map(a => `
@@ -1178,22 +1236,123 @@ function renderAgents() {
         <div class="agent-name">${a.name}</div>
         <div class="agent-role">${a.role}</div>
       </div>
-      <div class="agent-status">${a.status}</div>
+      <div class="agent-status is-unknown">${a.status}</div>
     </div>
   `).join('');
 }
 
 function openAgent(id) { openAgentsPage(id); }
 function closeSheet() { document.getElementById('overlay').classList.remove('open'); }
-function renderAgentFloor(focusId) {
-  const host = document.getElementById('agent-floor-cards');
+const OUTBOX_KEY = 'hq.conductor.outbox.v1';
+function readOutbox() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(OUTBOX_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) { return []; }
+}
+function findOfficeBot(id) {
+  const key = String(id || '');
+  return OFFICE.find(bot => bot.id === key || bot.key === key) || null;
+}
+function hqConductorSend(input) {
+  const text = String(input && input.text || '').trim();
+  if (!text) return { ok: false, status: 'empty' };
+  const bot = findOfficeBot(input && (input.botId || input.bot));
+  if (!bot) return { ok: false, status: 'unknown_bot' };
+  const message = {
+    id: 'msg-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    botId: bot.id,
+    botName: bot.name,
+    text: text.slice(0, 2000),
+    at: new Date().toISOString(),
+    status: 'pending'
+  };
+  const box = readOutbox();
+  box.push(message);
+  localStorage.setItem(OUTBOX_KEY, JSON.stringify(box.slice(-100)));
+  return { ok: true, status: 'pending', configured: false, queued: true, message: message };
+}
+window.HQConductorHandoff = { send: hqConductorSend, list: readOutbox };
+let openBotId = '';
+function renderOffice() {
+  const host = document.getElementById('office-floor');
   if (!host) return;
-  const conductor = '<article class="bot-card is-hub" data-id="conductor"><div class="sprite conductor" aria-hidden="true"><i class="visor"></i><i class="port"></i></div><div class="bot-copy"><h3>Conductor</h3><div class="role">Delegation hub</div><div class="agent-status">No live status</div><p>Conductor sits in the middle and delegates to the roster on this page. No job feed is stored for Conductor, so this is not a live heartbeat.</p></div></article>';
-  host.innerHTML = conductor + AGENTS.map(a => {
-    const job = a.detail ? esc(a.detail) : 'No job description on file.';
-    const status = a.status ? esc(a.status) : 'Unknown';
-    return '<article class="bot-card' + (focusId === a.id ? ' is-focus' : '') + '" data-id="' + esc(a.id) + '"><div class="sprite" data-sprite="' + esc(a.id) + '" aria-hidden="true"><i class="visor"></i></div><div class="bot-copy"><h3>' + esc(a.name) + '</h3><div class="role">' + esc(a.role) + '</div><div class="agent-status">' + status + '</div><p>' + job + '</p><p class="from-hub">Shown under Conductor</p></div></article>';
-  }).join('');
+  const byKey = {};
+  OFFICE.forEach(bot => { byKey[bot.key] = bot; });
+  function seat(bot, cls) {
+    const open = openBotId === bot.id;
+    return '<button type="button" class="seat ' + cls + (open ? ' is-open' : '') + '" data-bot="' + esc(bot.id) + '" aria-pressed="' + (open ? 'true' : 'false') + '">' +
+      '<span class="seat-name">' + esc(bot.name) + '</span></button>';
+  }
+  host.innerHTML = '<div class="floor-stage">' +
+    '<img class="floor-plate floor-plate-wide" src="assets/command-floor.jpg" alt="">' +
+    '<img class="floor-plate floor-plate-tall" src="assets/command-floor-phone.jpg" alt="">' +
+    '<svg class="floor-streams streams-wide" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">' +
+    '<path class="stream stream-green" d="M30,43.5 C36,44 42,44.5 47,45.5"/>' +
+    '<path class="stream stream-amber" d="M70,44.5 C62,45 56,46 53,47"/>' +
+    '<path class="stream stream-cyan" d="M40,68 C43,62 47,55 50,49"/>' +
+    '</svg>' +
+    '<svg class="floor-streams streams-tall" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">' +
+    '<path class="stream stream-green" d="M24,40 C32,40 38,38 44,36"/>' +
+    '<path class="stream stream-amber" d="M76,40 C68,40 62,38 56,36"/>' +
+    '<path class="stream stream-cyan" d="M50,52 L50,42"/>' +
+    '</svg>' +
+    '<div class="hub-glow" aria-hidden="true"></div>' +
+    seat(byKey.research, 'seat-research') +
+    seat(byKey.deployer, 'seat-deployer') +
+    seat(byKey.conductor, 'seat-conductor') +
+    '</div>';
+  host.querySelectorAll('.seat').forEach(btn => {
+    btn.addEventListener('click', () => openBotPanel(btn.getAttribute('data-bot')));
+  });
+}
+function renderAgentFloor() { renderOffice(); }
+function paintOutbox(bot) {
+  const host = document.getElementById('bot-outbox');
+  if (!host) return;
+  const rows = readOutbox().filter(row => row.botId === bot.id).slice(-5).reverse();
+  host.innerHTML = rows.length ? rows.map(row => {
+    const when = new Date(row.at);
+    const shown = Number.isNaN(when.getTime()) ? row.at : when.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    return '<div class="row"><span class="label">' + esc(row.text) + '</span><span class="meta">Pending · will reach Conductor · ' + esc(shown) + '</span></div>';
+  }).join('') : '';
+}
+function openBotPanel(id) {
+  const bot = findOfficeBot(id);
+  const panel = document.getElementById('bot-panel');
+  if (!bot || !panel) return;
+  openBotId = bot.id;
+  const layout = document.querySelector('.office-layout');
+  if (layout) layout.classList.add('has-panel');
+  document.getElementById('bot-panel-name').textContent = bot.name;
+  document.getElementById('bot-panel-role').textContent = bot.role;
+  document.getElementById('bot-panel-job').textContent = bot.job;
+  document.getElementById('bot-send-note').textContent = '';
+  panel.hidden = false;
+  paintOutbox(bot);
+  renderOffice();
+  const box = document.getElementById('bot-compose');
+  if (box) box.focus();
+}
+function closeBotPanel() {
+  openBotId = '';
+  const panel = document.getElementById('bot-panel');
+  if (panel) panel.hidden = true;
+  const layout = document.querySelector('.office-layout');
+  if (layout) layout.classList.remove('has-panel');
+  renderOffice();
+}
+function sendBotNote() {
+  const box = document.getElementById('bot-compose');
+  const note = document.getElementById('bot-send-note');
+  const text = box ? box.value.trim() : '';
+  if (!text) return;
+  const result = window.HQConductorHandoff.send({ botId: openBotId, text: text });
+  if (!result || !result.ok) return;
+  if (box) box.value = '';
+  if (note) note.textContent = 'Queued on this device. Will reach Conductor when that handoff is connected. Not a live reply.';
+  const bot = findOfficeBot(openBotId);
+  if (bot) paintOutbox(bot);
 }
 function motionOff() {
   return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1206,48 +1365,74 @@ function fitPageCanvas(canvas) {
   if (canvas.width !== w) canvas.width = w;
   if (canvas.height !== h) canvas.height = h;
 }
-function paintCircuit(canvas, time) {
+function paintUniverse(canvas, time) {
   if (!canvas) return;
   fitPageCanvas(canvas);
   const ctx = canvas.getContext('2d');
   const w = canvas.width;
   const h = canvas.height;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.clearRect(0, 0, w, h);
-  ctx.fillStyle = '#080705';
+  ctx.fillStyle = '#03060e';
   ctx.fillRect(0, 0, w, h);
-  const glow = ctx.createRadialGradient(w * 0.5, h * 0.46, 8, w * 0.5, h * 0.46, Math.max(w, h) * 0.42);
-  glow.addColorStop(0, 'rgba(255,170,40,0.22)');
-  glow.addColorStop(0.45, 'rgba(180,70,0,0.08)');
-  glow.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = glow;
+  const band = ctx.createLinearGradient(0, h * 0.15, w, h * 0.85);
+  band.addColorStop(0, 'rgba(0,0,0,0)');
+  band.addColorStop(0.42, 'rgba(70,100,170,0.18)');
+  band.addColorStop(0.5, 'rgba(210,220,255,0.08)');
+  band.addColorStop(0.58, 'rgba(70,100,170,0.16)');
+  band.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = band;
   ctx.fillRect(0, 0, w, h);
-  const step = 16;
+  function unit(i) {
+    const x = Math.sin(i * 127.1 + 311.7) * 43758.5453;
+    return x - Math.floor(x);
+  }
+  for (let i = 0; i < 520; i++) {
+    const x = unit(i) * w;
+    const y = unit(i + 17) * h;
+    const scale = unit(i + 3);
+    const radius = scale > 0.94 ? 1.8 : scale > 0.72 ? 1.05 : 0.4;
+    ctx.fillStyle = unit(i + 9) > 0.72
+      ? 'rgba(186,214,255,' + (0.35 + scale * 0.6) + ')'
+      : 'rgba(255,255,255,' + (0.28 + scale * 0.65) + ')';
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, 6.283);
+    ctx.fill();
+  }
+  const patterns = [
+    [[0.12, 0.22], [0.18, 0.18], [0.24, 0.24], [0.30, 0.20], [0.34, 0.30], [0.28, 0.36], [0.36, 0.40]],
+    [[0.58, 0.16], [0.64, 0.26], [0.70, 0.18], [0.76, 0.28], [0.84, 0.18]],
+    [[0.46, 0.58], [0.52, 0.64], [0.48, 0.72], [0.56, 0.76], [0.44, 0.80]]
+  ];
   ctx.lineWidth = 1;
-  ctx.lineCap = 'butt';
-  for (let y = 8; y < h; y += step) {
-    for (let x = 8; x < w; x += step) {
-      const n = Math.sin(x * 0.05 + y * 0.04 + time) * Math.cos(y * 0.06 - x * 0.03 + time * 0.2);
-      if (n > 0.55) continue;
-      ctx.strokeStyle = n > 0.2 ? 'rgba(255,196,70,0.9)' : 'rgba(190,90,10,0.55)';
+  ctx.strokeStyle = 'rgba(186,206,255,0.38)';
+  ctx.fillStyle = 'rgba(236,242,255,0.95)';
+  patterns.forEach(points => {
+    ctx.beginPath();
+    points.forEach((point, index) => {
+      const x = point[0] * w;
+      const y = point[1] * h;
+      if (index === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    points.forEach(point => {
       ctx.beginPath();
-      const cell = ((x / step) + (y / step) * 3) % 5;
-      if (cell < 2) { ctx.moveTo(x, y + 0.5); ctx.lineTo(x + step - 4, y + 0.5); }
-      else if (cell < 3.4) { ctx.moveTo(x + 0.5, y); ctx.lineTo(x + 0.5, y + step - 4); }
-      else if (cell < 4.2) { ctx.moveTo(x, y); ctx.lineTo(x + 8, y); ctx.lineTo(x + 8, y + 8); }
-      else { ctx.moveTo(x, y + 6); ctx.lineTo(x, y); ctx.lineTo(x + 10, y); }
+      ctx.arc(point[0] * w, point[1] * h, 1.7, 0, 6.283);
+      ctx.fill();
+    });
+  });
+  if (!motionOff()) {
+    for (let s = 0; s < 3; s++) {
+      const u = (time * 0.12 + s * 0.31) % 1;
+      const x = (0.08 + s * 0.26) * w + u * w * 0.35;
+      const y = (0.12 + (s % 2) * 0.22) * h + u * h * 0.2;
+      ctx.strokeStyle = 'rgba(255,255,255,' + ((1 - u) * 0.85) + ')';
+      ctx.lineWidth = 1.3;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x - 36, y - 12);
       ctx.stroke();
     }
-  }
-  ctx.strokeStyle = 'rgba(255,210,90,0.85)';
-  ctx.lineWidth = 1.4;
-  const cx = w * 0.5;
-  const cy = h * 0.46;
-  for (let r = 36; r < Math.min(w, h) * 0.48; r += 22) {
-    ctx.beginPath();
-    const a0 = time * 0.15 + r * 0.02;
-    ctx.arc(cx, cy, r, a0, a0 + 4.4);
-    ctx.stroke();
   }
 }
 function pageVisible() {
@@ -1258,8 +1443,9 @@ function pageVisible() {
 }
 function paintPages(time) {
   const t = typeof time === 'number' ? time / 1000 : 1;
-  paintCircuit(document.getElementById('book-field'), t);
-  paintCircuit(document.getElementById('agent-floor'), t);
+  paintUniverse(document.getElementById('book-field'), t);
+  paintUniverse(document.getElementById('agent-floor'), t);
+  paintUniverse(document.getElementById('markets-field'), t);
   paintOrb(document.getElementById('markets-orb'), t);
   paintTrackingChart();
 }
@@ -1305,8 +1491,9 @@ function openBookPage() {
   showPage('page-book');
 }
 function openAgentsPage(focusId) {
-  renderAgentFloor(focusId || '');
+  renderOffice();
   showPage('page-agents');
+  if (focusId) openBotPanel(focusId);
 }
 function openMarketsPage() {
   renderMarketsPage();
@@ -1337,7 +1524,7 @@ function reply(raw) {
   if (q.includes('listing')) return local + 'Listings, pipeline, and escrows share one window. The full page sums stored records only.';
   if (q.includes('task')) return local + 'Open tasks can be completed, edited, and added. They stay on this device and, when the tasks table accepts them, in that table.';
   if (q.includes('pipeline') || q.includes('escrow')) return local + 'Pipeline and escrow are tabs in the listings window. Figures stay empty until records are stored.';
-  if (q.includes('agent')) return local + 'Agents opens the floor. Conductor is the hub. The four roster notes are what is stored.';
+  if (q.includes('agent')) return local + 'Agents opens the command floor. Conductor, New Bot, and HQ Deployer sit at their stations. A note you send is queued on this device. It is not a live reply.';
   if (q.includes('market') || q.includes('stock') || q.includes('research')) return local + 'Markets opens its own page. Holdings have no sizes, the chart stays empty until a manual or projected figure is entered, and weekday research stays in the stock-research chat. No Fidelity link and no quotes.';
   return local + 'Grok Bot is not connected from this page.';
 }
@@ -1503,7 +1690,7 @@ function renderHoldingsBoard() {
 function renderTrackingList() {
   const host = document.getElementById('tracking-list');
   if (!host) return;
-  host.innerHTML = TRACKED.map(row => '<div class="track-item"><strong>' + esc(row.symbol) + '</strong><span>' + esc(row.note) + '</span></div>').join('');
+  host.innerHTML = TRACKED.map(row => '<div class="track-item"><div class="track-copy"><strong>' + esc(row.symbol) + '</strong><span>' + esc(row.note) + '</span></div></div>').join('');
 }
 function ensureFigureSelect() {
   const sel = document.getElementById('figure-symbol');
@@ -1870,6 +2057,8 @@ document.getElementById('task-add-btn').addEventListener('click', addTask);
 document.getElementById('task-add-title').addEventListener('keydown', (e) => { if (e.key === 'Enter') addTask(); });
 document.getElementById('open-book-page').addEventListener('click', (e) => { e.stopPropagation(); openBookPage(); });
 document.getElementById('open-agents-page').addEventListener('click', () => openAgentsPage());
+document.getElementById('bot-panel-close').addEventListener('click', closeBotPanel);
+document.getElementById('bot-send').addEventListener('click', sendBotNote);
 document.getElementById('open-markets-page').addEventListener('click', () => openMarketsPage());
 document.getElementById('open-markets-full').addEventListener('click', (e) => { e.stopPropagation(); openMarketsPage(); });
 document.getElementById('open-research-page').addEventListener('click', openResearch);
