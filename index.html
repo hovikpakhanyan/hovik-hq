@@ -456,6 +456,12 @@ button.row { width: 100%; background: none; border: 0; border-bottom: 1px solid 
 .detail-note { border-top: 1px solid var(--border); padding-top: 12px; }
 .detail-note .k { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.1em; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px; }
 .detail-note .v { font-size: 12.5px; line-height: 1.55; color: var(--text-dim); }
+
+.hot-row { padding: 6px 0; border-bottom: 1px solid rgba(255, 200, 80, 0.14); }
+.hot-row:last-child { border-bottom: 0; }
+.hot-contact { opacity: 0.75; font-size: 0.85em; margin-left: 6px; }
+.hot-meta { opacity: 0.6; font-size: 0.78em; margin-top: 2px; }
+#hot-panel h5 { margin: 10px 0 4px; }
 </style>
 </head>
 <body>
@@ -588,6 +594,11 @@ button.row { width: 100%; background: none; border: 0; border-bottom: 1px solid 
         <section class="mkt-zone"><h5>Advice / research</h5><p class="feed-empty">No research notes yet.</p></section>
       </div>
       <button type="button" id="open-research">Open research</button>
+    </div>
+    <div class="work-panel" id="hot-panel">
+      <h4>Hot Prospects <span class="count" id="hot-count">—</span></h4>
+      <p class="save-note" id="hot-note"></p>
+      <div id="hot-rows"></div>
     </div>
   </section>
 </div>
@@ -923,6 +934,7 @@ function showApp(email) {
   emailEl.title = email || '';
   loadData();
   loadResearch();
+  loadHotProspects();
   sb.auth.getSession().then(function (res) {
     var id = res && res.data && res.data.session && res.data.session.user && res.data.session.user.id;
     if (window.HQWindows) window.HQWindows.bind(id || '');
@@ -944,6 +956,50 @@ let dealsStorage = 'unknown';
 let pageRaf = 0;
 
 function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+async function loadHotProspects() {
+  const note = document.getElementById('hot-note');
+  const rows = document.getElementById('hot-rows');
+  if (!rows) return;
+  let session = null;
+  try { const res = await sb.auth.getSession(); session = res && res.data && res.data.session; } catch (e) { session = null; }
+  if (!session) { if (note) note.textContent = 'Sign in to load.'; return; }
+  if (note) note.textContent = 'Loading…';
+  try {
+    const res = await fetch('/fub/hot', { headers: { authorization: 'Bearer ' + session.access_token } });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { if (note) note.textContent = 'Could not load (' + (data.error || res.status) + ').'; return; }
+    renderHot(data);
+  } catch (e) {
+    if (note) note.textContent = 'Could not load.';
+  }
+}
+function hotPersonRow(p) {
+  const bits = [];
+  if (p.stage) bits.push(p.stage);
+  if (p.source) bits.push(p.source);
+  if (p.updated) bits.push('updated ' + String(p.updated).slice(0, 10));
+  const contact = p.email || p.phone || '';
+  return '<div class="hot-row"><strong>' + esc(p.name || 'Unnamed') + '</strong>' +
+    (contact ? ' <span class="hot-contact">' + esc(contact) + '</span>' : '') +
+    (bits.length ? '<div class="hot-meta">' + esc(bits.join(' - ')) + '</div>' : '') + '</div>';
+}
+function renderHot(data) {
+  const rows = document.getElementById('hot-rows');
+  const count = document.getElementById('hot-count');
+  const note = document.getElementById('hot-note');
+  const stage = (data.hotByStage && data.hotByStage.people) || [];
+  const tag = (data.hotByTag && data.hotByTag.people) || [];
+  const stageErr = data.hotByStage && data.hotByStage.error;
+  const tagErr = data.hotByTag && data.hotByTag.error;
+  count.textContent = String(stage.length);
+  let html = '<h5>Stage "Hot Prospect" (' + stage.length + ')</h5>';
+  html += stage.length ? stage.map(hotPersonRow).join('') : '<p class="feed-empty">' + (stageErr ? 'Could not load (' + esc(stageErr) + ').' : 'None.') + '</p>';
+  html += '<h5>Tag "Hot" (' + tag.length + ')</h5>';
+  html += tag.length ? tag.map(hotPersonRow).join('') : '<p class="feed-empty">' + (tagErr ? 'Could not load (' + esc(tagErr) + ').' : 'None.') + '</p>';
+  rows.innerHTML = html;
+  if (note) note.textContent = 'Live from Follow Up Boss.';
+}
+
 function taskKey() { return 'hq.tasks.v1.' + (taskUser || 'device'); }
 function readTaskStore() {
   try {
