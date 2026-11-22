@@ -57,8 +57,7 @@ export default async function fub(req) {
     if (!process.env.FUB_API_KEY) return json({ error: 'unconfigured' }, 503);
     if (!(await callerIsOwner(req))) return json({ error: 'unauthorized' }, 401);
     const byStage = await fubPeople('stage=' + encodeURIComponent('Hot Prospect'));
-    const byTag = await fubPeople('tags=' + encodeURIComponent('Hot'));
-    return json({ hotByStage: byStage, hotByTag: byTag });
+    return json({ hot: byStage });
   } catch (err) {
     return json({ error: 'unavailable' }, 503);
   }
