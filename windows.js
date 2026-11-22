@@ -1,5 +1,5 @@
 (function (root) {
-  var TITLES = { agents: 'Agents', chat: 'Chat', listings: 'Listings', tasks: 'Tasks', markets: 'Markets' };
+  var TITLES = { agents: 'Agents', chat: 'Chat', listings: 'Listings', tasks: 'Tasks', markets: 'Markets', hot: 'Hot Prospects' };
   var homes = new Map();
   var wins = new Map();
   var zTop = 1;
@@ -245,7 +245,8 @@
       ['.chat-head', 'chat'],
       ['#listings-panel h4', 'listings'],
       ['#tasks-panel h4', 'tasks'],
-      ['#markets-panel h4', 'markets']
+      ['#markets-panel h4', 'markets'],
+      ['#hot-panel h4', 'hot']
     ].forEach(function (pair) {
       var el = document.querySelector(pair[0]);
       if (!el || el.querySelector('.float-panel')) return;
