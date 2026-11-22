@@ -991,17 +991,11 @@ function renderHot(data) {
   const rows = document.getElementById('hot-rows');
   const count = document.getElementById('hot-count');
   const note = document.getElementById('hot-note');
-  const stage = (data.hotByStage && data.hotByStage.people) || [];
-  const tag = (data.hotByTag && data.hotByTag.people) || [];
-  const stageErr = data.hotByStage && data.hotByStage.error;
-  const tagErr = data.hotByTag && data.hotByTag.error;
+  const stage = (data.hot && data.hot.people) || [];
+  const stageErr = data.hot && data.hot.error;
   count.textContent = String(stage.length);
-  let html = '<h5>Stage "Hot Prospect" (' + stage.length + ')</h5>';
-  html += stage.length ? stage.map(hotPersonRow).join('') : '<p class="feed-empty">' + (stageErr ? 'Could not load (' + esc(stageErr) + ').' : 'None.') + '</p>';
-  html += '<h5>Tag "Hot" (' + tag.length + ')</h5>';
-  html += tag.length ? tag.map(hotPersonRow).join('') : '<p class="feed-empty">' + (tagErr ? 'Could not load (' + esc(tagErr) + ').' : 'None.') + '</p>';
-  rows.innerHTML = html;
-  if (note) note.textContent = 'Live from Follow Up Boss.';
+  rows.innerHTML = stage.length ? stage.map(hotPersonRow).join('') : '<p class="feed-empty">' + (stageErr ? 'Could not load (' + esc(stageErr) + ').' : 'None in stage Hot Prospect.') + '</p>';
+  if (note) note.textContent = 'Live from Follow Up Boss - stage: Hot Prospect.';
 }
 
 function taskKey() { return 'hq.tasks.v1.' + (taskUser || 'device'); }
