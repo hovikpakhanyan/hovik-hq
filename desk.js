@@ -215,6 +215,35 @@
     return { items: items, store: next };
   }
 
+  function absorbHqTasks(remoteRows, store, hqRows) {
+    const remoteIds = new Set((remoteRows || []).filter(function (row) { return row && row.id != null; }).map(function (row) { return String(row.id); }));
+    const exported = new Set();
+    const extras = [];
+    (hqRows || []).forEach(function (row) {
+      if (!row || row.id == null) return;
+      if (row.external_key && remoteIds.has(String(row.external_key))) return;
+      if (row.external_key) exported.add(String(row.external_key));
+      extras.push({
+        id: String(row.id),
+        data: {
+          subject: row.subject,
+          note: row.note,
+          priority: row.priority,
+          completed: row.completed,
+          completed_at: row.completed_at
+        }
+      });
+    });
+    const src = store || emptyStore();
+    const next = {
+      patches: Object.assign({}, src.patches || {}),
+      created: (src.created || []).filter(function (row) {
+        return row && row.id && !exported.has(String(row.id));
+      })
+    };
+    return mergeTasks((remoteRows || []).concat(extras), next);
+  }
+
   root.HQDesk = {
     emptyStore: emptyStore,
     pacificYear: pacificYear,
@@ -222,6 +251,7 @@
     escrowLane: escrowLane,
     formatCents: formatCents,
     buildDesk: buildDesk,
-    mergeTasks: mergeTasks
+    mergeTasks: mergeTasks,
+    absorbHqTasks: absorbHqTasks
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

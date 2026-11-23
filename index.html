@@ -574,6 +574,11 @@ button.row { width: 100%; background: none; border: 0; border-bottom: 1px solid 
         <label class="field">Details <textarea id="task-add-note" maxlength="4000" placeholder="Optional"></textarea></label>
         <button type="button" class="text-btn" id="task-add-btn">Add task</button>
       </div>
+      <div class="task-form" id="hq-export">
+        <button type="button" class="text-btn" id="export-local">Export local data to HQ</button>
+        <p class="save-note" id="export-count"></p>
+        <p class="save-note" id="export-note"></p>
+      </div>
       <datalist id="priority-list">
         <option value="High"></option>
         <option value="Medium"></option>
@@ -1179,6 +1184,88 @@ function openBook(tab) {
   renderBook();
   if (window.HQWindows) window.HQWindows.open('listings');
 }
+async function loadOptional(table, columns) {
+  try {
+    const q = await sb.from(table).select(columns);
+    const kind = researchKind(q.error);
+    if (kind === 'missing') return { missing: true, rows: [] };
+    if (kind) return { missing: false, error: true, rows: [] };
+    return { missing: false, rows: q.data || [] };
+  } catch (e) {
+    return { missing: false, error: true, rows: [] };
+  }
+}
+function exportKeyOk(value) {
+  return /^[A-Za-z0-9._:-]{1,80}$/.test(String(value || ''));
+}
+async function exportLocalToHq() {
+  const note = document.getElementById('export-note');
+  const say = (text) => { if (note) note.textContent = text; };
+  let session = null;
+  try {
+    const res = await sb.auth.getSession();
+    session = res && res.data && res.data.session;
+  } catch (e) { session = null; }
+  const uid = session && session.user && session.user.id;
+  if (!uid) { say('Sign in as the owner to export.'); return; }
+  const store = readTaskStore();
+  const tasks = []
+    .concat(store.created || [])
+    .concat(Object.keys(store.patches || {}).map((id) => Object.assign({ id: id }, store.patches[id])));
+  const taskRows = [];
+  const seen = new Set();
+  tasks.forEach((row) => {
+    if (!row || !exportKeyOk(row.id) || !String(row.subject || '').trim() || seen.has(String(row.id)) || taskRows.length >= 200) return;
+    seen.add(String(row.id));
+    const completed = !!row.completed;
+    taskRows.push({
+      owner_id: uid,
+      external_key: String(row.id),
+      subject: String(row.subject).trim().slice(0, 180),
+      note: String(row.note || '').slice(0, 4000),
+      priority: String(row.priority || '').slice(0, 40),
+      completed: completed,
+      completed_at: completed ? (row.completed_at || new Date().toISOString()) : null
+    });
+  });
+  const noteRows = readOutbox().filter((row) => row && exportKeyOk(row.id) && String(row.text || '').trim()).slice(-100).map((row) => ({
+    owner_id: uid,
+    external_key: String(row.id),
+    body: String(row.text).trim().slice(0, 4000),
+    source: 'conductor',
+    status: 'open'
+  }));
+  let planBody = '';
+  try {
+    const planRes = await fetch('investment-plan.md', { cache: 'no-store' });
+    if (planRes.ok) planBody = await planRes.text();
+  } catch (e) { planBody = ''; }
+  const taskWrite = taskRows.length
+    ? await sb.from('hq_tasks').upsert(taskRows, { onConflict: 'owner_id,external_key' })
+    : { error: null };
+  const noteWrite = noteRows.length
+    ? await sb.from('hq_notes').upsert(noteRows, { onConflict: 'owner_id,external_key' })
+    : { error: null };
+  let planWrite = { error: null };
+  if (planBody.trim()) {
+    planWrite = await sb.from('hq_plan').upsert({
+      owner_id: uid,
+      title: 'Hovik’s Investment Plan',
+      body: planBody.slice(0, 65536),
+      source: 'investment-plan.md'
+    }, { onConflict: 'owner_id' });
+  }
+  const failed = [taskWrite, noteWrite, planWrite].some((result) => result && result.error);
+  if (failed) {
+    const kind = researchKind((taskWrite && taskWrite.error) || (noteWrite && noteWrite.error) || (planWrite && planWrite.error));
+    say(kind === 'missing'
+      ? 'HQ tables are not on this project yet. Nothing was changed.'
+      : 'The export did not land. Local data is still only on this device.');
+    return;
+  }
+  say('Exported ' + taskRows.length + ' tasks, ' + noteRows.length + ' notes, and the investment plan file.');
+  await loadData();
+}
 async function loadDealRows() {
   if (dealsStorage === 'missing') return { rows: [], note: '' };
   try {
@@ -1212,7 +1299,13 @@ async function loadData() {
     deals: deals.rows || []
   };
   dealNote = deals.note || '';
-  const merged = HQDesk.mergeTasks(deskRaw.tasks, taskStore);
+  const hqTasks = await loadOptional('hq_tasks', 'id,subject,note,priority,completed,completed_at,external_key');
+  const hqNotes = await loadOptional('hq_notes', 'id');
+  const exportCount = document.getElementById('export-count');
+  if (exportCount && !hqTasks.missing && !hqNotes.missing) {
+    exportCount.textContent = 'HQ copy: ' + hqTasks.rows.length + ' tasks, ' + hqNotes.rows.length + ' notes.';
+  }
+  const merged = HQDesk.absorbHqTasks(deskRaw.tasks, taskStore, hqTasks.rows);
   taskItems = merged.items;
   taskStore = merged.store;
   writeTaskStore();
@@ -2054,6 +2147,7 @@ document.getElementById('tasks-rows').addEventListener('click', (e) => {
 document.getElementById('task-save').addEventListener('click', saveTaskEditor);
 document.getElementById('task-cancel').addEventListener('click', () => { document.getElementById('task-editor').hidden = true; });
 document.getElementById('task-add-btn').addEventListener('click', addTask);
+document.getElementById('export-local').addEventListener('click', exportLocalToHq);
 document.getElementById('task-add-title').addEventListener('keydown', (e) => { if (e.key === 'Enter') addTask(); });
 document.getElementById('open-book-page').addEventListener('click', (e) => { e.stopPropagation(); openBookPage(); });
 document.getElementById('open-agents-page').addEventListener('click', () => openAgentsPage());
