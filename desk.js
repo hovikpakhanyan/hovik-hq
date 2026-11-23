@@ -97,6 +97,33 @@
     };
   }
 
+  function isActiveDeal(row) {
+    if (!row || typeof row !== 'object') return false;
+    if (row.archived === true) return false;
+    if (row.archived_at) return false;
+    return true;
+  }
+
+  function chooseBook(listings, escrows, deals, state) {
+    const rows = Array.isArray(deals) ? deals : [];
+    const active = rows.filter(isActiveDeal);
+    if (state === 'ready' && rows.length) {
+      return { listings: [], escrows: [], deals: active, source: 'deal_records' };
+    }
+    return {
+      listings: Array.isArray(listings) ? listings : [],
+      escrows: Array.isArray(escrows) ? escrows : [],
+      deals: [],
+      source: 'legacy'
+    };
+  }
+
+  function planText(hqRow, fileText) {
+    const body = hqRow && hqRow.body != null ? String(hqRow.body) : '';
+    if (body.trim()) return body;
+    return fileText == null ? '' : String(fileText);
+  }
+
   function sumCents(records) {
     let total = 0;
     let n = 0;
@@ -244,6 +271,76 @@
     return mergeTasks((remoteRows || []).concat(extras), next);
   }
 
+  function presentTasks(legacyRows, hqRows, state, store) {
+    const hq = (Array.isArray(hqRows) ? hqRows : []).filter(function (row) {
+      return row && row.id != null;
+    }).slice().sort(function (a, b) {
+      const au = Date.parse(a.updated_at || '') || 0;
+      const bu = Date.parse(b.updated_at || '') || 0;
+      return bu - au;
+    });
+    const useHq = state === 'ready' && hq.length > 0;
+    const src = store || emptyStore();
+    const next = {
+      patches: Object.assign({}, src.patches || {}),
+      created: (src.created || []).slice()
+    };
+    let remote;
+    if (useHq) {
+      const exported = new Set();
+      hq.forEach(function (row) {
+        if (row.external_key) exported.add(String(row.external_key));
+      });
+      next.created = next.created.filter(function (row) {
+        return row && row.id && !exported.has(String(row.id));
+      });
+      remote = hq.map(function (row) {
+        return {
+          id: row.id,
+          data: {
+            subject: row.subject,
+            note: row.note == null ? '' : row.note,
+            priority: row.priority == null ? '' : row.priority,
+            completed: row.completed === true,
+            completed_at: row.completed ? (row.completed_at || null) : null
+          }
+        };
+      });
+    } else {
+      remote = Array.isArray(legacyRows) ? legacyRows : [];
+    }
+    const merged = mergeTasks(remote, next);
+    return { source: useHq ? 'hq_tasks' : 'tasks', items: merged.items, store: merged.store };
+  }
+
+  function noteRowsForOutbox(localRows, hqRows, state) {
+    const local = (Array.isArray(localRows) ? localRows : []).filter(function (row) {
+      return row && String(row.text || '').trim();
+    });
+    const hq = (Array.isArray(hqRows) ? hqRows : []).filter(function (row) {
+      return row && String(row.body || '').trim() && row.status !== 'archived';
+    }).slice().sort(function (a, b) {
+      const au = Date.parse(a.updated_at || '') || 0;
+      const bu = Date.parse(b.updated_at || '') || 0;
+      return bu - au;
+    });
+    if (state !== 'ready' || !hq.length) {
+      return local.map(function (row) {
+        return { text: String(row.text), meta: 'local', id: row.id, at: row.at || null };
+      });
+    }
+    const keys = new Set();
+    hq.forEach(function (row) {
+      if (row.external_key) keys.add(String(row.external_key));
+    });
+    const kept = local.filter(function (row) { return !keys.has(String(row.id)); });
+    return hq.map(function (row) {
+      return { text: String(row.body), meta: 'hq', id: row.external_key || row.id, at: row.updated_at || null };
+    }).concat(kept.map(function (row) {
+      return { text: String(row.text), meta: 'local', id: row.id, at: row.at || null };
+    }));
+  }
+
   root.HQDesk = {
     emptyStore: emptyStore,
     pacificYear: pacificYear,
@@ -251,7 +348,11 @@
     escrowLane: escrowLane,
     formatCents: formatCents,
     buildDesk: buildDesk,
+    chooseBook: chooseBook,
+    planText: planText,
     mergeTasks: mergeTasks,
-    absorbHqTasks: absorbHqTasks
+    absorbHqTasks: absorbHqTasks,
+    presentTasks: presentTasks,
+    noteRowsForOutbox: noteRowsForOutbox
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

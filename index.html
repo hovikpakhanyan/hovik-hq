@@ -939,6 +939,9 @@ function showApp(email) {
 let taskUser = 'device';
 let taskStore = window.HQDesk ? HQDesk.emptyStore() : { patches: {}, created: [] };
 let taskItems = [];
+let taskSource = 'tasks';
+let hqNoteRows = [];
+let hqNoteState = 'missing';
 let deskRaw = { listings: [], escrows: [], deals: [], tasks: [] };
 let deskView = window.HQDesk ? HQDesk.buildDesk({}) : null;
 let bookTab = 'listings';
@@ -988,17 +991,31 @@ function rememberTask(item) {
   writeTaskStore();
   renderTasks();
 }
-async function persistTask(item) {
-  let session = null;
-  try {
-    const res = await sb.auth.getSession();
-    session = res && res.data && res.data.session;
-  } catch (e) { session = null; }
-  if (!session) {
-    setTaskNote('Saved on this device.');
-    return;
+async function saveHqTask(item, data, uid) {
+  const row = {
+    subject: String(data.subject || '').trim().slice(0, 180),
+    note: String(data.note || '').slice(0, 4000),
+    priority: String(data.priority || '').slice(0, 40),
+    completed: !!data.completed,
+    completed_at: data.completed ? (data.completed_at || new Date().toISOString()) : null
+  };
+  if (!row.subject) return 'failed';
+  let res;
+  if (!item.remote) {
+    const key = exportKeyOk(item.id) ? String(item.id) : null;
+    res = await sb.from('hq_tasks').insert(Object.assign({ owner_id: uid, external_key: key }, row)).select('id').maybeSingle();
+    if (!res.error && res.data && res.data.id) {
+      const editor = document.getElementById('task-edit-id');
+      if (editor && editor.value === item.id) editor.value = res.data.id;
+      return 'ok';
+    }
+  } else {
+    res = await sb.from('hq_tasks').update(row).eq('id', item.id).eq('owner_id', uid).select('id');
+    if (!res.error && res.data && res.data.length) return 'ok';
   }
-  const data = taskPayload(item);
+  return researchKind(res && res.error) === 'missing' ? 'missing' : 'failed';
+}
+async function persistLegacyTask(item, data) {
   if (!item.remote) {
     const res = await sb.from('tasks').insert({ data: data }).select('id').maybeSingle();
     if (res.error || !res.data) {
@@ -1022,6 +1039,38 @@ async function persistTask(item) {
   }
   if (original) original.data = next;
   setTaskNote('Saved in the tasks table.');
+}
+async function persistTask(item) {
+  let session = null;
+  try {
+    const res = await sb.auth.getSession();
+    session = res && res.data && res.data.session;
+  } catch (e) { session = null; }
+  if (!session || !session.user) {
+    setTaskNote('Saved on this device.');
+    return;
+  }
+  const data = taskPayload(item);
+  const writeHq = taskSource === 'hq_tasks' || !item.remote;
+  if (writeHq) {
+    const saved = await saveHqTask(item, data, session.user.id);
+    if (saved === 'ok') {
+      if (!item.remote) {
+        taskStore.created = taskStore.created.filter(row => row.id !== item.id);
+        writeTaskStore();
+      }
+      setTaskNote('Saved in HQ tasks.');
+      await loadData();
+      return;
+    }
+    if (saved !== 'missing') {
+      setTaskNote(item.remote
+        ? 'Saved on this device. HQ tasks did not take the edit.'
+        : 'Saved on this device. HQ tasks did not accept the new row.');
+      return;
+    }
+  }
+  await persistLegacyTask(item, data);
 }
 function completeTask(id, done) {
   const item = taskItems.find(row => row.id === id);
@@ -1264,20 +1313,28 @@ async function exportLocalToHq() {
     return;
   }
   say('Exported ' + taskRows.length + ' tasks, ' + noteRows.length + ' notes, and the investment plan file.');
+  if (planBody.trim()) planLoaded = false;
   await loadData();
+  if (planBody.trim()) await loadPlan();
 }
 async function loadDealRows() {
-  if (dealsStorage === 'missing') return { rows: [], note: '' };
+  if (dealsStorage === 'missing') return { rows: [], state: 'missing', note: '' };
+  const columns = 'id,external_key,kind,lane,title,status_label,price_cents,net_est_cents,closed_on,note,source_updated_at';
   try {
-    const q = await sb.from('deal_records').select('id,external_key,kind,lane,title,status_label,price_cents,net_est_cents,closed_on,note,source_updated_at');
+    let q = await sb.from('deal_records').select(columns + ',archived_at');
+    const first = researchKind(q.error);
+    if (q.error && first !== 'missing' && /archived_at/i.test(String(q.error.message || '') + ' ' + String(q.error.code || ''))) {
+      q = await sb.from('deal_records').select(columns);
+    }
     const kind = researchKind(q.error);
-    if (kind === 'missing') { dealsStorage = 'missing'; return { rows: [], note: '' }; }
-    if (kind === 'auth') return { rows: [], note: 'Published deals could not be read. The session was rejected.' };
-    if (kind) return { rows: [], note: 'Published deals could not be read.' };
+    if (kind === 'missing') { dealsStorage = 'missing'; return { rows: [], state: 'missing', note: '' }; }
+    if (kind === 'auth') return { rows: [], state: 'error', note: 'Published deals could not be read. The session was rejected.' };
+    if (kind) return { rows: [], state: 'error', note: 'Published deals could not be read.' };
+    const rows = q.data || [];
     dealsStorage = 'ready';
-    return { rows: q.data || [], note: '' };
+    return { rows: rows, state: rows.length ? 'ready' : 'empty', note: '' };
   } catch (e) {
-    return { rows: [], note: 'Published deals could not be read.' };
+    return { rows: [], state: 'error', note: 'Published deals could not be read.' };
   }
 }
 async function loadData() {
@@ -1292,25 +1349,34 @@ async function loadData() {
   const escrowsQ = await sb.from('escrows').select('*');
   const tasksQ = await sb.from('tasks').select('*');
   const deals = await loadDealRows();
+  const book = HQDesk.chooseBook(listingsQ.data || [], escrowsQ.data || [], deals.rows, deals.state);
   deskRaw = {
-    listings: listingsQ.data || [],
-    escrows: escrowsQ.data || [],
+    listings: book.listings,
+    escrows: book.escrows,
     tasks: tasksQ.data || [],
-    deals: deals.rows || []
+    deals: book.deals
   };
   dealNote = deals.note || '';
-  const hqTasks = await loadOptional('hq_tasks', 'id,subject,note,priority,completed,completed_at,external_key');
-  const hqNotes = await loadOptional('hq_notes', 'id');
+  const hqTasks = await loadOptional('hq_tasks', 'id,subject,note,priority,completed,completed_at,external_key,updated_at');
+  const hqNotes = await loadOptional('hq_notes', 'id,external_key,body,status,updated_at');
+  hqNoteRows = hqNotes.rows || [];
+  hqNoteState = hqNotes.missing ? 'missing' : hqNotes.error ? 'error' : (hqNoteRows.length ? 'ready' : 'empty');
   const exportCount = document.getElementById('export-count');
   if (exportCount && !hqTasks.missing && !hqNotes.missing) {
     exportCount.textContent = 'HQ copy: ' + hqTasks.rows.length + ' tasks, ' + hqNotes.rows.length + ' notes.';
   }
-  const merged = HQDesk.absorbHqTasks(deskRaw.tasks, taskStore, hqTasks.rows);
-  taskItems = merged.items;
-  taskStore = merged.store;
+  const hqState = hqTasks.missing ? 'missing' : hqTasks.error ? 'error' : (hqTasks.rows.length ? 'ready' : 'empty');
+  const presented = HQDesk.presentTasks(deskRaw.tasks, hqTasks.rows, hqState, taskStore);
+  taskItems = presented.items;
+  taskStore = presented.store;
+  taskSource = presented.source;
   writeTaskStore();
   renderBook();
   renderTasks();
+  if (openBotId) {
+    const bot = findOfficeBot(openBotId);
+    if (bot) paintOutbox(bot);
+  }
 }
 
 // ── Agents ──
@@ -1400,15 +1466,32 @@ function renderOffice() {
   });
 }
 function renderAgentFloor() { renderOffice(); }
-function paintOutbox(bot) {
-  const host = document.getElementById('bot-outbox');
-  if (!host) return;
-  const rows = readOutbox().filter(row => row.botId === bot.id).slice(-5).reverse();
-  host.innerHTML = rows.length ? rows.map(row => {
+function paintLocalOutbox(rows) {
+  return rows.length ? rows.map(row => {
     const when = new Date(row.at);
     const shown = Number.isNaN(when.getTime()) ? row.at : when.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
     return '<div class="row"><span class="label">' + esc(row.text) + '</span><span class="meta">Pending · will reach Conductor · ' + esc(shown) + '</span></div>';
   }).join('') : '';
+}
+function paintOutbox(bot) {
+  const host = document.getElementById('bot-outbox');
+  if (!host) return;
+  const local = readOutbox().filter(row => row.botId === bot.id);
+  const picked = bot.key === 'conductor' && hqNoteState === 'ready'
+    ? HQDesk.noteRowsForOutbox(local, hqNoteRows, hqNoteState)
+    : [];
+  if (!picked.some(row => row.meta === 'hq')) {
+    host.innerHTML = paintLocalOutbox(local.slice(-5).reverse());
+    return;
+  }
+  host.innerHTML = picked.slice(0, 8).map(row => {
+    if (row.meta !== 'hq') {
+      const when = new Date(row.at);
+      const shown = Number.isNaN(when.getTime()) ? row.at : when.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+      return '<div class="row"><span class="label">' + esc(row.text) + '</span><span class="meta">Pending · will reach Conductor · ' + esc(shown) + '</span></div>';
+    }
+    return '<div class="row"><span class="label">' + esc(row.text) + '</span><span class="meta">HQ note</span></div>';
+  }).join('');
 }
 function openBotPanel(id) {
   const bot = findOfficeBot(id);
@@ -1615,7 +1698,7 @@ function reply(raw) {
   const q = raw.toLowerCase();
   const local = 'Local shortcut, not Grok Bot. ';
   if (q.includes('listing')) return local + 'Listings, pipeline, and escrows share one window. The full page sums stored records only.';
-  if (q.includes('task')) return local + 'Open tasks can be completed, edited, and added. They stay on this device and, when the tasks table accepts them, in that table.';
+  if (q.includes('task')) return local + 'Open tasks can be completed, edited, and added. They stay on this device and, when HQ tasks accepts them, in that table.';
   if (q.includes('pipeline') || q.includes('escrow')) return local + 'Pipeline and escrow are tabs in the listings window. Figures stay empty until records are stored.';
   if (q.includes('agent')) return local + 'Agents opens the command floor. Conductor, New Bot, and HQ Deployer sit at their stations. A note you send is queued on this device. It is not a live reply.';
   if (q.includes('market') || q.includes('stock') || q.includes('research')) return local + 'Markets opens its own page. Holdings have no sizes, the chart stays empty until a manual or projected figure is entered, and weekday research stays in the stock-research chat. No Fidelity link and no quotes.';
@@ -1993,14 +2076,25 @@ let planLoaded = false;
 async function loadPlan() {
   const host = document.getElementById('plan-rules');
   if (!host || planLoaded) return;
+  let hqRow = null;
   try {
-    const res = await fetch('investment-plan.md', { cache: 'no-store' });
-    if (!res.ok) throw new Error('missing');
-    host.innerHTML = renderPlan(await res.text());
-    planLoaded = true;
-  } catch (e) {
-    host.innerHTML = '<p>The investment plan could not be read from this page.</p>';
+    const q = await sb.from('hq_plan').select('body').limit(1);
+    if (!researchKind(q.error)) hqRow = (q.data || [])[0] || null;
+  } catch (e) { hqRow = null; }
+  let fileText = '';
+  if (!HQDesk.planText(hqRow, '')) {
+    try {
+      const res = await fetch('investment-plan.md', { cache: 'no-store' });
+      if (res.ok) fileText = await res.text();
+    } catch (e) { fileText = ''; }
   }
+  const text = HQDesk.planText(hqRow, fileText);
+  if (!text) {
+    host.innerHTML = '<p>The investment plan could not be read from this page.</p>';
+    return;
+  }
+  host.innerHTML = renderPlan(text);
+  planLoaded = true;
 }
 function renderMarketsPage() {
   renderHoldingsBoard();

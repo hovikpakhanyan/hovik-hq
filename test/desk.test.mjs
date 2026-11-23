@@ -127,6 +127,113 @@ test('deal migration is fail-closed and does not seed records', () => {
   assert.equal(sql.includes('insert into public.tasks'), false);
 });
 
+test('deal_records kinds map onto the panels and legacy tables are the empty fallback', () => {
+  const deals = [
+    { id: 'a', kind: 'listing', lane: 'current', title: 'Active home', status_label: 'Active', price_cents: 1000 },
+    { id: 'b', kind: 'listing', lane: 'upcoming', title: 'Soon', status_label: 'Upcoming' },
+    { id: 'c', kind: 'listing', lane: 'sold', title: 'Closed', status_label: 'Sold', net_est_cents: 100, closed_on: '2026-03-01' },
+    { id: 'd', kind: 'pipeline', lane: 'pipeline', title: 'In pipeline', status_label: 'Pipeline', net_est_cents: 50 },
+    { id: 'e', kind: 'escrow', lane: 'escrow', title: 'In escrow', status_label: 'Open' },
+    { id: 'f', kind: 'listing', lane: 'current', title: 'Archived', status_label: 'Active', archived_at: '2026-11-01T00:00:00Z' },
+    { id: 'g', kind: 'listing', lane: 'escrow', title: 'Bad lane', status_label: 'Open' }
+  ];
+  const legacyListings = [{ id: 'L', data: { address: 'Legacy listing', status: 'Active', net_est: 9 } }];
+  const legacyEscrows = [{ id: 'E', data: { address: 'Legacy escrow', status: 'Pipeline', net_est: 4 } }];
+  const chosen = HQDesk.chooseBook(legacyListings, legacyEscrows, deals, 'ready');
+  const view = HQDesk.buildDesk(Object.assign({ now }, chosen));
+  const titles = (rows) => Array.from(rows, (row) => row.title);
+  assert.equal(chosen.source, 'deal_records');
+  assert.deepEqual(titles(view.tabs.listings), ['Active home']);
+  assert.deepEqual(titles(view.tabs.pipeline), ['In pipeline']);
+  assert.deepEqual(titles(view.tabs.escrows), ['In escrow']);
+  assert.deepEqual(titles(view.lanes.upcoming), ['Soon']);
+  assert.deepEqual(titles(view.lanes.sold), ['Closed']);
+  assert.equal(view.records.some((row) => row.title === 'Legacy listing' || row.title === 'Archived' || row.title === 'Bad lane'), false);
+  assert.equal(view.projected.cents, 50);
+  assert.equal(view.closed.cents, 100);
+
+  for (const state of ['empty', 'missing', 'error']) {
+    const fallback = HQDesk.chooseBook(legacyListings, legacyEscrows, state === 'empty' ? [] : deals, state);
+    const legacy = HQDesk.buildDesk(Object.assign({ now }, fallback));
+    const names = (rows) => Array.from(rows, (row) => row.title);
+    assert.equal(fallback.source, 'legacy');
+    assert.deepEqual(names(legacy.tabs.listings), ['Legacy listing']);
+    assert.deepEqual(names(legacy.tabs.pipeline), ['Legacy escrow']);
+    assert.equal(legacy.records.some((row) => row.title === 'Active home'), false);
+  }
+});
+
+test('hq_tasks replace the legacy task list only when that table has rows', () => {
+  const legacy = [{ id: 'remote-1', data: { subject: 'Legacy', note: '', priority: '', completed: false } }];
+  const store = {
+    patches: {},
+    created: [
+      { id: 'local-1', subject: 'On device', note: '', priority: '', completed: false },
+      { id: 'local-2', subject: 'Stay', note: '', priority: '', completed: false }
+    ]
+  };
+  const hq = HQDesk.presentTasks(legacy, [
+    { id: 'hq-1', external_key: 'local-1', subject: 'From HQ', note: 'n', priority: 'High', completed: true, completed_at: '2026-11-01T00:00:00Z', updated_at: '2026-11-02T00:00:00Z' },
+    { id: 'hq-0', external_key: null, subject: 'Older', note: '', priority: '', completed: false, completed_at: null, updated_at: '2026-10-01T00:00:00Z' }
+  ], 'ready', store);
+  assert.equal(hq.source, 'hq_tasks');
+  assert.deepEqual(Array.from(hq.items, (item) => item.subject), ['From HQ', 'Older', 'Stay']);
+  assert.equal(hq.items[0].remote, true);
+  assert.equal(hq.items[0].completed, true);
+  assert.equal(hq.items[0].priority, 'High');
+  assert.equal(hq.store.created.some((row) => row.id === 'local-1'), false);
+  assert.equal(hq.items.some((item) => item.subject === 'Legacy'), false);
+
+  for (const state of ['empty', 'missing', 'error']) {
+    const back = HQDesk.presentTasks(legacy, [], state, {
+      patches: {},
+      created: [{ id: 'local-2', subject: 'Stay', note: '', priority: '', completed: false }]
+    });
+    assert.equal(back.source, 'tasks');
+    assert.deepEqual(Array.from(back.items, (item) => item.subject), ['Legacy', 'Stay']);
+  }
+});
+
+test('conductor notes prefer open hq_notes and keep device notes the table does not have', () => {
+  const local = [
+    { id: 'msg-1', text: 'Local copy', at: '2026-11-01T00:00:00Z' },
+    { id: 'msg-2', text: 'Only here', at: '2026-11-02T00:00:00Z' }
+  ];
+  const hq = HQDesk.noteRowsForOutbox(local, [
+    { external_key: 'msg-1', body: 'Edited in HQ', status: 'open', updated_at: '2026-11-03T00:00:00Z' },
+    { external_key: 'msg-9', body: 'From the publisher', status: 'open', updated_at: '2026-11-04T00:00:00Z' },
+    { external_key: 'msg-8', body: 'Hidden', status: 'archived', updated_at: '2026-11-05T00:00:00Z' }
+  ], 'ready');
+  assert.deepEqual(Array.from(hq, (row) => row.text), ['From the publisher', 'Edited in HQ', 'Only here']);
+  assert.equal(hq[0].meta, 'hq');
+  assert.equal(hq[2].meta, 'local');
+  const fallback = HQDesk.noteRowsForOutbox(local, [], 'empty');
+  assert.deepEqual(Array.from(fallback, (row) => row.text), ['Local copy', 'Only here']);
+  assert.equal(fallback.every((row) => row.meta === 'local'), true);
+});
+
+test('the plan block prefers hq_plan body text and otherwise keeps the file', () => {
+  assert.equal(HQDesk.planText({ body: '# From HQ\n' }, '# File\n'), '# From HQ\n');
+  assert.equal(HQDesk.planText({ body: '   ' }, '# File\n'), '# File\n');
+  assert.equal(HQDesk.planText(null, '# File\n'), '# File\n');
+  assert.equal(HQDesk.planText({ body: '' }, ''), '');
+});
+
+test('the page keeps legacy reads and switches panels through the desk mapping', () => {
+  const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  assert.equal(html.includes("sb.from('listings')"), true);
+  assert.equal(html.includes("sb.from('escrows')"), true);
+  assert.equal(html.includes("sb.from('tasks')"), true);
+  assert.equal(html.includes("sb.from('deal_records')"), true);
+  assert.equal(html.includes("sb.from('hq_tasks')"), true);
+  assert.equal(html.includes("sb.from('hq_plan')"), true);
+  assert.equal(html.includes('HQDesk.chooseBook'), true);
+  assert.equal(html.includes('HQDesk.presentTasks'), true);
+  assert.equal(html.includes('HQDesk.planText'), true);
+  assert.equal(html.includes('id="export-local"'), true);
+  assert.equal(html.includes('archived_at'), true);
+});
+
 test('hq tasks from the database replace an exported local copy without dropping legacy rows', () => {
   const merged = HQDesk.absorbHqTasks(
     [{ id: 'remote-1', data: { subject: 'Legacy', note: '', priority: '', completed: false } }],
