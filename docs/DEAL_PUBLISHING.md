@@ -2,7 +2,7 @@
 
 This file is the contract for listing, pipeline, and escrow updates. Nothing in the pull request applies the migration, sets a secret, or writes a sample row.
 
-The HQ page reads `listings` and `escrows` that are already on file, and `deal_records` when that table exists. Until the migration is applied, the published half is empty and the page still renders. Amounts on the tracker are sums of stored net estimates, or zero with a label when none are stored.
+The HQ page reads `deal_records` for the listings, pipeline, and escrow panels when that table has rows. `kind` is `listing`, `pipeline`, or `escrow`. A listing uses lane `current`, `upcoming`, or `sold`; pipeline uses `pipeline`; escrow uses `escrow`. Rows with `archived_at` set stay off the panels. If `deal_records` is missing or has no rows, the page still reads `listings` and `escrows` that are already on file. Amounts on the tracker are sums of stored net estimates, or zero with a label when none are stored.
 
 ## Where it runs
 
@@ -67,4 +67,4 @@ The owner id is read from `hq_private.owner_config`. The caller cannot choose it
 
 ## What HQ shows
 
-Active listings, pipeline, and escrows are tabs in one window. The full page sums pipeline net estimates into projected earnings and sums sold records whose `closed_on` falls in the current America/Los_Angeles year. A sold row with no close date is listed and is not added to the year total. A status string such as a year is not treated as money.
+Active listings, pipeline, and escrows are tabs in one window. Those tabs use `deal_records` when that table has rows, and the legacy `listings` and `escrows` tables when it does not. The full page sums pipeline net estimates into projected earnings and sums sold records whose `closed_on` falls in the current America/Los_Angeles year. A sold row with no close date is listed and is not added to the year total. A status string such as a year is not treated as money. Tasks on the page read `hq_tasks` when that table has rows, and `tasks` otherwise. The investment plan block reads `hq_plan` when that row has body text, and `investment-plan.md` otherwise. Conductor’s note list shows open `hq_notes` when that table has rows, and keeps device notes that are not already in it.
