@@ -1,5 +1,6 @@
 import { preflight } from './validate.mjs';
 import { dealPreflight } from './deals.mjs';
+import { KEY_PREFIX, KEY_TOOLS } from './keys.mjs';
 
 const TOOLS = [
   {
@@ -62,6 +63,28 @@ const TOOLS = [
   }
 ];
 
+// Read-only tool for publisher keys that carry research.read. Not offered to
+// OAuth sessions, whose scopes are unchanged.
+const READ_TOOL = {
+  name: 'read_stock_research',
+  description: 'Read the HQ owner\'s own published stock research notes, newest first. Read-only. No watchlist, deal, listing, pipeline, or escrow data.',
+  inputSchema: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      limit: { type: 'integer', minimum: 1, maximum: 50 },
+      symbol: { type: 'string' },
+      run_id: { type: 'string' }
+    }
+  }
+};
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function keyTools(scope) {
+  return [...TOOLS, READ_TOOL].filter((tool) => KEY_TOOLS[tool.name] && scope.includes(KEY_TOOLS[tool.name]));
+}
+
 function rpcResult(id, result) {
   return { jsonrpc: '2.0', id, result };
 }
@@ -72,7 +95,15 @@ function rpcError(id, code, message) {
 export async function handleMcp({ auth, db, body, authorization }) {
   const header = String(authorization || '');
   const token = header.startsWith('Bearer ') ? header.slice(7) : '';
-  const session = token ? await auth.introspect(token) : null;
+  let session = null;
+  if (token.startsWith(KEY_PREFIX) && auth.introspectKey) {
+    session = await auth.introspectKey(token);
+    if (session && session.limited) {
+      return { status: 429, headers: { 'cache-control': 'no-store', 'retry-after': '600' }, body: { error: 'rate_limited' } };
+    }
+  } else if (token) {
+    session = await auth.introspect(token);
+  }
   if (!session) {
     return {
       status: 401,
@@ -95,11 +126,34 @@ export async function handleMcp({ auth, db, body, authorization }) {
     }) };
   }
   if (message.method === 'tools/list') {
-    return { status: 200, body: rpcResult(id, { tools: TOOLS }) };
+    return { status: 200, body: rpcResult(id, { tools: session.via === 'key' ? keyTools(session.scope) : TOOLS }) };
   }
   if (message.method === 'tools/call') {
     const name = message.params && message.params.name;
     const args = (message.params && message.params.arguments) || {};
+    if (session.via === 'key' && !KEY_TOOLS[name] && TOOLS.some((tool) => tool.name === name)) {
+      // Deal, listing, pipeline, and escrow tools are never available to a key.
+      return { status: 403, headers: { 'cache-control': 'no-store' }, body: rpcError(id, -32001, 'insufficient_scope') };
+    }
+    if (name === 'read_stock_research') {
+      if (session.via !== 'key' || !session.scope.includes('research.read')) {
+        return { status: 403, body: rpcError(id, -32001, 'insufficient_scope') };
+      }
+      if (args.owner_id || args.destination || args.sql) {
+        return { status: 200, body: rpcResult(id, { isError: true, content: [{ type: 'text', text: JSON.stringify({ ok: false, error_code: 'forbidden_field' }) }] }) };
+      }
+      const limit = Number.isInteger(args.limit) ? Math.min(Math.max(args.limit, 1), 50) : 20;
+      const symbol = typeof args.symbol === 'string' && /^[A-Z][A-Z0-9.]{0,9}$/.test(args.symbol) ? args.symbol : null;
+      if (args.symbol !== undefined && !symbol) {
+        return { status: 200, body: rpcResult(id, { isError: true, content: [{ type: 'text', text: JSON.stringify({ ok: false, error_code: 'bad_symbol' }) }] }) };
+      }
+      const runId = typeof args.run_id === 'string' && UUID.test(args.run_id) ? args.run_id : null;
+      if (args.run_id !== undefined && !runId) {
+        return { status: 200, body: rpcResult(id, { isError: true, content: [{ type: 'text', text: JSON.stringify({ ok: false, error_code: 'bad_run_id' }) }] }) };
+      }
+      const result = await db.readResearch({ limit, symbol, runId });
+      return { status: 200, body: rpcResult(id, { isError: !result.ok, content: [{ type: 'text', text: JSON.stringify(result) }] }) };
+    }
     if (name === 'publish_stock_research') {
       if (!session.scope.includes('research.publish')) {
         return {

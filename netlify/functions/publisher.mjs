@@ -3,6 +3,7 @@ import { handleMcp } from '../../publisher/mcp.mjs';
 import { authorizeTransport, readWebBody } from '../../publisher/body.mjs';
 import { createPgStore } from '../../publisher/pg-store.mjs';
 import { publisherDbConfig } from '../../publisher/db-config.mjs';
+import { keysHomePage, keysListPage, keyIssuedPage, keysErrorPage } from '../../publisher/keys-page.mjs';
 
 const REQUIRED = ['HQ_RESOURCE_URL', 'HQ_OAUTH_CLIENT_ID', 'HQ_OWNER_BOOTSTRAP_CODE', 'HQ_OAUTH_REDIRECT_URIS', 'HQ_PUBLISHER_DATABASE_URL'];
 
@@ -49,6 +50,54 @@ function oauthFields(params) {
     state: params.get('state'),
     bootstrap: params.get('bootstrap')
   };
+}
+
+const PAGE_HEADERS = {
+  'content-type': 'text/html; charset=utf-8',
+  'cache-control': 'no-store',
+  'referrer-policy': 'no-referrer',
+  'x-content-type-options': 'nosniff',
+  'x-frame-options': 'DENY',
+  'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+};
+
+function page(html, status = 200) {
+  return new Response(html, { status, headers: PAGE_HEADERS });
+}
+
+const KEY_ERRORS = {
+  rate_limited: 'Too many attempts. Wait ten minutes and try again.',
+  access_denied: 'That owner code did not match.',
+  unknown_client: 'Pick one of the listed clients.',
+  too_many_active_keys: 'This client already has three active keys. Revoke one first.',
+  bad_origin: 'This form must be sent from the HQ page itself.',
+  server_unconfigured: 'The publisher is not configured.'
+};
+
+async function keysRoute(req, url, issuer) {
+  const blocked = authorizeTransport(req.method, url.searchParams.has('bootstrap'));
+  if (blocked) return json({ error: blocked.error }, blocked.status);
+  if (req.method === 'GET') return page(keysHomePage());
+  const origin = req.headers.get('origin');
+  const expected = new URL(process.env.HQ_RESOURCE_URL).origin;
+  if (origin !== null && origin !== expected) return page(keysErrorPage(KEY_ERRORS.bad_origin), 403);
+  const taken = await takeBody(req);
+  if (taken.response) return taken.response;
+  const params = new URLSearchParams(taken.raw);
+  const gate = await issuer.ownerGate(params.get('bootstrap') || '');
+  if (!gate.ok) return page(keysErrorPage(KEY_ERRORS[gate.error] || 'Not allowed.'), gate.status || 401);
+  const action = params.get('action');
+  if (action === 'issue') {
+    const issued = await issuer.issueKey(params.get('client') || '', params.get('label') || '');
+    if (!issued.ok) return page(keysErrorPage(KEY_ERRORS[issued.error_code] || 'The key was not created.'), 400);
+    return page(keyIssuedPage(issued, await issuer.listKeys()));
+  }
+  if (action === 'revoke') {
+    const done = await issuer.revokeKey(params.get('id') || '');
+    return page(keysListPage(await issuer.listKeys(), done ? 'Key revoked.' : 'That key was already revoked or not found.'));
+  }
+  if (action === 'list') return page(keysListPage(await issuer.listKeys()));
+  return page(keysErrorPage('Unknown action.'), 400);
 }
 
 async function takeBody(req) {
@@ -111,6 +160,7 @@ async function route(req) {
     await issuer.revoke(new URLSearchParams(taken.raw).get('token') || '');
     return json({});
   }
+  if (url.pathname === '/publisher/keys') return keysRoute(req, url, issuer);
   if (req.method === 'POST' && url.pathname === '/mcp') {
     const taken = await takeBody(req);
     if (taken.response) return taken.response;
@@ -120,6 +170,7 @@ async function route(req) {
         publish: (payload) => getStore().query('select hq_private.publish_stock_research($1::jsonb) as result', [payload]).then((r) => r.rows[0].result),
         status: (id) => getStore().query('select hq_private.research_status($1::uuid) as result', [id]).then((r) => r.rows[0].result),
         publishDeal: (payload) => getStore().query('select hq_private.publish_deal($1::jsonb) as result', [payload]).then((r) => r.rows[0].result),
+        readResearch: ({ limit, symbol, runId }) => getStore().query('select hq_private.read_stock_research($1::int, $2::text, $3::uuid) as result', [limit, symbol, runId]).then((r) => r.rows[0].result),
         dealStatus: (key) => getStore().query('select hq_private.deal_status($1::text) as result', [key]).then((r) => r.rows[0].result)
       },
       body: taken.raw,
@@ -142,6 +193,7 @@ export const config = {
     '/.well-known/oauth-protected-resource',
     '/.well-known/oauth-authorization-server',
     '/oauth/*',
+    '/publisher/keys',
     '/mcp'
   ]
 };

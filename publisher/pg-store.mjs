@@ -57,6 +57,23 @@ export function createPgStore(connectionString, options = {}) {
       try { await pool.query('select hq_private.oauth_purge_expired()'); }
       catch { /* retention is best-effort and must not change the client error */ }
     },
+    async keyCheck(hash) {
+      const { rows } = await pool.query('select * from hq_private.publisher_key_check($1)', [hash]);
+      if (!rows.length) return null;
+      return { hash: rows[0].key_hash, client: rows[0].client, scope: Array.isArray(rows[0].scopes) ? rows[0].scopes : [] };
+    },
+    async keyIssue(hash, client, label) {
+      const { rows } = await pool.query('select hq_private.publisher_key_issue($1, $2, $3) as result', [hash, client, label || '']);
+      return rows[0].result;
+    },
+    async keyList() {
+      const { rows } = await pool.query('select hq_private.publisher_key_list() as result');
+      return rows[0].result || [];
+    },
+    async keyRevoke(id) {
+      const { rows } = await pool.query('select hq_private.publisher_key_revoke($1::uuid) as ok', [id]);
+      return rows[0].ok === true;
+    },
     async query(sql, params) {
       return pool.query(sql, params);
     },

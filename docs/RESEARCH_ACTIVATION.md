@@ -53,6 +53,10 @@ These steps are not done by the pull request.
 
 Authorize and token attempts are counted in Postgres, 20 and 60 per ten minutes for one client, so a second function instance sees the same limit. A wrong owner code after the limit returns `rate_limited` and is not checked again.
 
+## Publisher keys
+
+A long-lived, per-client key is an alternative to the OAuth connection. See `docs/PUBLISHER_KEY.md` for the migration, the owner page at `/publisher/keys`, SQL insert, revoke, rotate, and rollback. OAuth is unchanged.
+
 ## What a 401 means
 
 `POST /mcp` without a usable token returns 401. The `WWW-Authenticate` header includes `resource_metadata` for `https://hq.hovikp.com/.well-known/oauth-protected-resource` and the two scopes. That document’s `resource` is `https://hq.hovikp.com/mcp`. Its authorization server is `https://hq.hovikp.com`.

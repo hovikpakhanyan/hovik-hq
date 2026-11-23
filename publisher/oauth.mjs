@@ -1,5 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { consentPage } from './consent.mjs';
+import { CLIENT_SCOPES, KEY_SCOPES, generateKey, hashKey, looksLikeKey } from './keys.mjs';
 
 function b64url(buf) {
   return Buffer.from(buf).toString('base64url');
@@ -20,6 +21,7 @@ const ALLOWED_SCOPES = ['research.publish', 'research.status.read'];
 const ACCESS_MS = 10 * 60 * 1000;
 const REFRESH_MS = 14 * 24 * 3600 * 1000;
 const CODE_MS = 60 * 1000;
+const KEY_DEFAULT_MS = 90 * 24 * 3600 * 1000;
 
 export function createMemoryStore() {
   const codes = new Map();
@@ -27,6 +29,7 @@ export function createMemoryStore() {
   const refresh = new Map();
   const families = new Map();
   const hits = new Map();
+  const keys = new Map();
   function kill(familyId) {
     const family = families.get(familyId);
     if (family) family.revoked = true;
@@ -86,7 +89,37 @@ export function createMemoryStore() {
       row.n += 1;
       return true;
     },
-    async purge() {}
+    async purge() {},
+    async keyCheck(hash) {
+      const row = keys.get(hash);
+      if (!row || row.revoked_at || row.expires_at <= Date.now()) return null;
+      row.last_used_at = Date.now();
+      return { hash: row.key_hash, client: row.client, scope: [...row.scopes] };
+    },
+    async keyIssue(hash, client, label = '') {
+      const scopes = CLIENT_SCOPES[client];
+      if (!scopes) return { ok: false, error_code: 'unknown_client' };
+      if (!/^[0-9a-f]{64}$/.test(hash)) return { ok: false, error_code: 'bad_hash' };
+      const active = [...keys.values()].filter((k) => k.client === client && !k.revoked_at && k.expires_at > Date.now());
+      if (active.length >= 3) return { ok: false, error_code: 'too_many_active_keys' };
+      const row = {
+        id: crypto.randomUUID(), client, label: String(label || '').slice(0, 80), key_hash: hash, scopes: [...scopes],
+        created_at: Date.now(), expires_at: Date.now() + KEY_DEFAULT_MS, revoked_at: null, last_used_at: null
+      };
+      keys.set(hash, row);
+      return { ok: true, id: row.id, client, scopes: row.scopes, expires_at: new Date(row.expires_at).toISOString() };
+    },
+    async keyList() {
+      return [...keys.values()].map(({ key_hash, ...rest }) => ({ ...rest }));
+    },
+    async keyRevoke(id) {
+      for (const row of keys.values()) {
+        if (row.id === id && !row.revoked_at) { row.revoked_at = Date.now(); return true; }
+      }
+      return false;
+    },
+    // Test helper: expire or inspect rows without exposing them to callers.
+    _keys: keys
   };
 }
 
@@ -115,6 +148,8 @@ export function createIssuer(options) {
   const limits = {
     authorize: options.limits?.authorize ?? 20,
     token: options.limits?.token ?? 60,
+    keys: options.limits?.keys ?? 20,
+    keyFail: options.limits?.keyFail ?? 60,
     windowSeconds: options.limits?.windowSeconds ?? 600
   };
   const origin = String(resource || '').replace(/\/$/, '');
@@ -256,5 +291,47 @@ export function createIssuer(options) {
     await store.revoke(hashToken(raw || ''));
   }
 
-  return { metadata, protectedResource, challenge, consent, authorize, token, introspect, revoke };
+  // Long-lived publisher key. Returns null for an unknown, revoked, or expired
+  // key, and { limited: true } once failed key attempts pass the shared limit.
+  async function introspectKey(raw) {
+    if (!looksLikeKey(raw) || !store.keyCheck) return failKey();
+    const hash = hashKey(raw);
+    const row = await store.keyCheck(hash);
+    if (!row || !same(row.hash, hash)) return failKey();
+    const scope = (row.scope || []).filter((s) => KEY_SCOPES.includes(s));
+    if (!scope.length) return failKey();
+    return { active: true, via: 'key', client: row.client, scope, aud: resource };
+  }
+
+  async function failKey() {
+    const ok = await store.hit('mcp_key_fail', limits.keyFail, limits.windowSeconds);
+    return ok ? null : { limited: true };
+  }
+
+  // Owner gate for /publisher/keys: same rate limiting and exact compare as consent.
+  async function ownerGate(code) {
+    if (!bootstrap) return { error: 'server_unconfigured', status: 503 };
+    if (!(await limited('keys', 'owner'))) return { error: 'rate_limited', status: 429 };
+    if (!same(code || '', bootstrap)) return { error: 'access_denied', status: 401 };
+    return { ok: true };
+  }
+
+  async function issueKey(client, label) {
+    if (!CLIENT_SCOPES[client]) return { ok: false, error_code: 'unknown_client' };
+    const key = generateKey();
+    const result = await store.keyIssue(hashKey(key), client, label || '');
+    if (!result || !result.ok) return result || { ok: false, error_code: 'unavailable' };
+    return { ...result, key };
+  }
+
+  async function listKeys() {
+    return store.keyList ? store.keyList() : [];
+  }
+
+  async function revokeKey(id) {
+    if (!/^[0-9a-f-]{36}$/i.test(String(id || ''))) return false;
+    return store.keyRevoke ? store.keyRevoke(String(id)) : false;
+  }
+
+  return { metadata, protectedResource, challenge, consent, authorize, token, introspect, revoke, introspectKey, ownerGate, issueKey, listKeys, revokeKey };
 }

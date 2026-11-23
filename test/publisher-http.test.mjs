@@ -94,3 +94,27 @@ test('the service-role database url is refused before a connection', async () =>
   assert.match(text, /publisher_role_required/);
   assert.equal(text.includes(secret), false);
 });
+
+test('the key page GET is a no-store owner form without secrets', async () => {
+  const res = await publisher(new Request('https://hq.hovikp.com/publisher/keys'));
+  const html = await res.text();
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('cache-control'), 'no-store');
+  assert.match(res.headers.get('content-security-policy'), /frame-ancestors 'none'/);
+  assert.equal(html.includes('owner-bootstrap-secret'), false);
+  assert.equal(html.includes(secret), false);
+  assert.equal(html.includes('action="/publisher/keys"'), true);
+  assert.equal(html.includes('type="password" name="bootstrap"'), true);
+});
+
+test('the key page refuses a cross-site post and a code in the query', async () => {
+  const cross = await publisher(new Request('https://hq.hovikp.com/publisher/keys', {
+    method: 'POST',
+    body: 'action=issue&client=grok-bot&bootstrap=owner-bootstrap-secret',
+    headers: { 'content-type': 'application/x-www-form-urlencoded', origin: 'https://evil.example' }
+  }));
+  assert.equal(cross.status, 403);
+  const query = await publisher(new Request('https://hq.hovikp.com/publisher/keys?bootstrap=owner-bootstrap-secret'));
+  assert.equal(query.status, 400);
+  assert.equal((await query.text()).includes('owner-bootstrap-secret'), false);
+});
