@@ -1,5 +1,5 @@
 // Run against a scratch database with the research, oauth token, oauth guard,
-// and publisher key migrations applied (not the deal migration):
+// publisher key, and claude publish-scope migrations applied (not the deal migration):
 //   HQ_TEST_DATABASE_URL=postgresql://... node test/publisher-keys-persist.mjs
 import assert from 'node:assert/strict';
 import pg from 'pg';
@@ -24,7 +24,7 @@ const grok = await issuer.issueKey('grok-bot', 'main');
 assert.equal(grok.ok, true);
 assert.deepEqual(grok.scopes, ['research.publish', 'research.status.read']);
 const claude = await issuer.issueKey('claude', '');
-assert.deepEqual(claude.scopes, ['research.status.read', 'research.read']);
+assert.deepEqual(claude.scopes, ['research.publish', 'research.status.read', 'research.read']);
 assert.equal((await issuer.issueKey('escrow-bot', '')).error_code, 'unknown_client');
 
 const stored = await admin.query('select key_hash, scopes, expires_at - created_at as life from hq_private.publisher_keys where id = $1', [grok.id]);
@@ -43,7 +43,8 @@ const listed = await issuer.listKeys();
 assert.equal(listed.length, 2);
 assert.equal(JSON.stringify(listed).includes(hashKey(grok.key)), false, 'list never returns hashes');
 
-await assert.rejects(admin.query(`insert into hq_private.publisher_keys (client, key_hash, scopes) values ('claude', $1, array['research.publish'])`, ['a'.repeat(64)]), /publisher_keys_client_scopes/);
+await assert.rejects(admin.query(`insert into hq_private.publisher_keys (client, key_hash, scopes) values ('instinct', $1, array['research.publish'])`, ['a'.repeat(64)]), /publisher_keys_client_scopes/);
+await assert.rejects(admin.query(`insert into hq_private.publisher_keys (client, key_hash, scopes) values ('claude', $1, array['deal.publish'])`, ['d'.repeat(64)]), /publisher_keys_(scopes_known|client_scopes)/);
 await assert.rejects(admin.query(`insert into hq_private.publisher_keys (client, key_hash, scopes) values ('grok-bot', $1, array['deal.publish'])`, ['b'.repeat(64)]), /publisher_keys_(scopes_known|client_scopes)/);
 await assert.rejects(admin.query(`insert into hq_private.publisher_keys (client, key_hash, scopes) values ('escrow', $1, array['research.read'])`, ['c'.repeat(64)]), /check/);
 
