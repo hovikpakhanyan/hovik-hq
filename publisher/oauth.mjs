@@ -94,7 +94,7 @@ export function createMemoryStore() {
       const row = keys.get(hash);
       if (!row || row.revoked_at || row.expires_at <= Date.now()) return null;
       row.last_used_at = Date.now();
-      return { hash: row.key_hash, client: row.client, scope: [...row.scopes] };
+      return { id: row.id, hash: row.key_hash, client: row.client, scope: [...row.scopes] };
     },
     async keyIssue(hash, client, label = '') {
       const scopes = CLIENT_SCOPES[client];
@@ -300,7 +300,7 @@ export function createIssuer(options) {
     if (!row || !same(row.hash, hash)) return failKey();
     const scope = (row.scope || []).filter((s) => KEY_SCOPES.includes(s));
     if (!scope.length) return failKey();
-    return { active: true, via: 'key', client: row.client, scope, aud: resource };
+    return { active: true, via: 'key', client: row.client, keyId: row.id, scope, aud: resource };
   }
 
   async function failKey() {

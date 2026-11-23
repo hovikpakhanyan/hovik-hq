@@ -19,7 +19,9 @@ const db = {
   status: () => ({ ok: true, configured: true }),
   readResearch: (q) => ({ ok: true, count: 0, notes: [], q }),
   publishDeal: never('publishDeal'),
-  dealStatus: never('dealStatus')
+  dealStatus: never('dealStatus'),
+  dealCounts: never('dealCounts'),
+  domain: never('domain')
 };
 
 function call(issuer, key, name, args = {}) {
@@ -43,7 +45,7 @@ test('issued keys store only the hash and carry the fixed client scopes', async 
   const { store, issuer } = setup();
   const issued = await issuer.issueKey('grok-bot', 'main');
   assert.equal(issued.ok, true);
-  assert.deepEqual(issued.scopes, ['research.publish', 'research.status.read']);
+  assert.deepEqual(issued.scopes, [...CLIENT_SCOPES['grok-bot']]);
   const row = store._keys.get(hashKey(issued.key));
   assert.ok(row);
   assert.equal(JSON.stringify([...store._keys.entries()]).includes(issued.key), false);
@@ -53,40 +55,80 @@ test('issued keys store only the hash and carry the fixed client scopes', async 
   assert.equal(JSON.stringify(listed).includes(hashKey(issued.key)), false);
   assert.equal(JSON.stringify(listed).includes(issued.key), false);
   assert.equal((await issuer.issueKey('admin', '')).error_code, 'unknown_client');
-  assert.deepEqual(CLIENT_SCOPES.claude, ['research.publish', 'research.status.read', 'research.read']);
+  assert.deepEqual([...CLIENT_SCOPES.claude], [...CLIENT_SCOPES['grok-bot']]);
+  assert.deepEqual([...CLIENT_SCOPES.instinct], ['research.status.read', 'research.read']);
 });
 
-test('grok-bot key publishes and reads status, but never reaches deal tools', async () => {
-  const { issuer } = setup();
-  const { key } = await issuer.issueKey('grok-bot');
-  const list = await handleMcp({ auth: issuer, db, body: { jsonrpc: '2.0', id: 1, method: 'tools/list' }, authorization: 'Bearer ' + key });
-  assert.deepEqual(list.body.result.tools.map((t) => t.name), ['publish_stock_research', 'research_status']);
-  assert.equal((await call(issuer, key, 'research_status')).status, 200);
-  const bad = await call(issuer, key, 'publish_stock_research', {});
+test('grok-bot and claude keys can reach HQ writes, and a read-only slice cannot', async () => {
+  const { store, issuer } = setup();
+  const grok = await issuer.issueKey('grok-bot');
+  const list = await handleMcp({ auth: issuer, db, body: { jsonrpc: '2.0', id: 1, method: 'tools/list' }, authorization: 'Bearer ' + grok.key });
+  const names = list.body.result.tools.map((t) => t.name);
+  assert.equal(names.includes('publish_stock_research'), true);
+  assert.equal(names.includes('research_status'), true);
+  assert.equal(names.includes('read_stock_research'), true);
+  assert.equal(names.includes('publish_deal'), true);
+  assert.equal(names.includes('deal_status'), true);
+  assert.equal(names.includes('create_listing'), true);
+  assert.equal(names.includes('update_escrow'), true);
+  assert.equal(names.includes('delete_task'), true);
+  assert.equal(names.includes('delete_note'), true);
+  assert.equal(names.includes('delete_listing'), false);
+  assert.equal(names.includes('delete_escrow'), false);
+  assert.equal(names.some((name) => /trade|order|sql/i.test(name)), false);
+  assert.equal((await call(issuer, grok.key, 'research_status')).status, 200);
+  const bad = await call(issuer, grok.key, 'publish_stock_research', {});
   assert.equal(bad.status, 200);
   assert.equal(bad.body.result.isError, true);
-  assert.equal((await call(issuer, key, 'publish_deal', { kind: 'escrow' })).status, 403);
-  assert.equal((await call(issuer, key, 'deal_status')).status, 403);
-  assert.equal((await call(issuer, key, 'read_stock_research')).status, 403);
-});
 
-test('claude key publishes, reads status, and reads research, but never reaches deal tools', async () => {
-  const { issuer } = setup();
-  const issued = await issuer.issueKey('claude');
-  assert.deepEqual(issued.scopes, ['research.publish', 'research.status.read', 'research.read']);
-  const list = await handleMcp({ auth: issuer, db, body: { jsonrpc: '2.0', id: 1, method: 'tools/list' }, authorization: 'Bearer ' + issued.key });
-  assert.deepEqual(list.body.result.tools.map((t) => t.name), ['publish_stock_research', 'research_status', 'read_stock_research']);
-  assert.equal((await call(issuer, issued.key, 'research_status')).status, 200);
-  const published = await call(issuer, issued.key, 'publish_stock_research', {});
-  assert.equal(published.status, 200);
-  assert.equal(published.body.result.isError, true);
-  const read = await call(issuer, issued.key, 'read_stock_research', { limit: 500, symbol: 'NVDA' });
+  const claude = await issuer.issueKey('claude');
+  assert.deepEqual(claude.scopes, [...CLIENT_SCOPES.claude]);
+  let seen = null;
+  const writing = {
+    ...db,
+    domain(call) { seen = call; return { ok: true, id: 'task-1' }; },
+    publishDeal(payload, actor) { seen = { payload, actor }; return { ok: true, replay: false, external_key: payload.external_key }; }
+  };
+  const task = await handleMcp({
+    auth: issuer, db: writing,
+    body: { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'create_task', arguments: { subject: 'Call back', note: 'Desk', priority: 'Low' } } },
+    authorization: 'Bearer ' + claude.key
+  });
+  assert.equal(task.status, 200);
+  assert.equal(task.body.result.isError, false);
+  assert.equal(seen.fn, 'task_mutate');
+  assert.equal(seen.args[0], 'create');
+  assert.equal(seen.args[2], 'claude');
+  assert.equal(seen.args[3], claude.id);
+  const quoted = await handleMcp({
+    auth: issuer, db: writing,
+    body: { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'create_task', arguments: { subject: 'Nope', price: 12 } } },
+    authorization: 'Bearer ' + claude.key
+  });
+  assert.match(quoted.body.result.content[0].text, /forbidden_field/);
+  const stamp = new Date(Date.now() - 60 * 1000).toISOString();
+  const deal = await handleMcp({
+    auth: issuer, db: writing,
+    body: { jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'publish_deal', arguments: {
+      schema_version: 1, record_id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', external_key: 'L1',
+      kind: 'listing', lane: 'current', title: 'House', status_label: 'Active', updated_at: stamp
+    } } },
+    authorization: 'Bearer ' + claude.key
+  });
+  assert.equal(deal.status, 200);
+  assert.equal(seen.actor.client, 'claude');
+  assert.equal(seen.actor.keyId, claude.id);
+  assert.equal(seen.payload.kind, 'listing');
+
+  const read = await call(issuer, claude.key, 'read_stock_research', { limit: 500, symbol: 'NVDA' });
   assert.equal(read.status, 200);
   assert.deepEqual(JSON.parse(read.body.result.content[0].text).q, { limit: 50, symbol: 'NVDA', runId: null });
-  const forbidden = await call(issuer, issued.key, 'read_stock_research', { owner_id: 'x' });
-  assert.match(forbidden.body.result.content[0].text, /forbidden_field/);
-  assert.equal((await call(issuer, issued.key, 'publish_deal', { kind: 'escrow' })).status, 403);
-  assert.equal((await call(issuer, issued.key, 'deal_status')).status, 403);
+  store._keys.get(hashKey(claude.key)).scopes = ['listings.read'];
+  const narrow = await handleMcp({ auth: issuer, db, body: { jsonrpc: '2.0', id: 5, method: 'tools/list' }, authorization: 'Bearer ' + claude.key });
+  assert.deepEqual(narrow.body.result.tools.map((t) => t.name), ['deal_status', 'list_listings', 'get_listing']);
+  assert.equal((await call(issuer, claude.key, 'create_listing', { external_key: 'L1' })).status, 403);
+  assert.equal((await call(issuer, claude.key, 'publish_deal', { kind: 'listing' })).status, 403);
+  assert.equal((await call(issuer, claude.key, 'delete_task', { id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' })).status, 403);
 });
 
 test('instinct keys are read-only', async () => {
@@ -97,6 +139,9 @@ test('instinct keys are read-only', async () => {
   assert.equal((await call(issuer, key, 'publish_stock_research', {})).status, 403);
   assert.equal((await call(issuer, key, 'publish_deal', {})).status, 403);
   assert.equal((await call(issuer, key, 'deal_status')).status, 403);
+  assert.equal((await call(issuer, key, 'create_task', { subject: 'Nope' })).status, 403);
+  assert.equal((await call(issuer, key, 'update_escrow', { external_key: 'E1', archive: true })).status, 403);
+  assert.equal((await call(issuer, key, 'delete_note', { id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' })).status, 403);
   const read = await call(issuer, key, 'read_stock_research', { limit: 500, symbol: 'NVDA' });
   assert.equal(read.status, 200);
   assert.deepEqual(JSON.parse(read.body.result.content[0].text).q, { limit: 50, symbol: 'NVDA', runId: null });

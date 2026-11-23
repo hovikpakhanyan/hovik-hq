@@ -17,6 +17,8 @@ OAuth scopes stay `research.publish` and `research.status.read`.
 - `publish_deal` requires a bearer token whose scope includes `research.publish`.
 - `deal_status` requires `research.status.read`.
 
+Publisher keys are different. A `grok-bot` or `claude` key needs `listings.write`, `pipeline.write`, or `escrow.write` for the record's kind. `instinct` cannot call these tools. The scope table, audit log, and archive rule are in `docs/PUBLISHER_KEY.md`. OAuth does not gain those key scopes.
+
 The consent page tells the owner that this same approval can publish deal records. It does not add a scope. A token minted before this change that already has `research.publish` can call `publish_deal` after the function is deployed and the migration is applied.
 
 ## publish_deal

@@ -29,9 +29,15 @@ ${inner}
 
 const OWNER_FIELD = '<label>Owner code <input type="password" name="bootstrap" autocomplete="off" required></label>';
 
+const CLIENT_LABEL = {
+  'grok-bot': 'full HQ read and write',
+  claude: 'full HQ read and write',
+  instinct: 'research status and research read only'
+};
+
 function issueForm() {
   const options = Object.keys(CLIENT_SCOPES).map((client) =>
-    `<option value="${escapeHtml(client)}">${escapeHtml(client)} — ${escapeHtml(CLIENT_SCOPES[client].join(', '))}</option>`
+    `<option value="${escapeHtml(client)}">${escapeHtml(client)} — ${escapeHtml(CLIENT_LABEL[client] || CLIENT_SCOPES[client].join(', '))}</option>`
   ).join('');
   return `<form method="post" action="/publisher/keys" autocomplete="off">
 <input type="hidden" name="action" value="issue">
@@ -50,7 +56,7 @@ function issueForm() {
 export function keysHomePage() {
   return shell('HQ publisher keys', `<h1>HQ publisher keys</h1>
 <p>Owner only. A key lets one client use the HQ research publisher at /mcp with an <code>Authorization: Bearer</code> header. Each key lasts 90 days and can be revoked here at any time.</p>
-<p>Scopes are fixed per client. No key can publish or read deal, listing, pipeline, or escrow records, approve trades, send messages, or change credentials.</p>
+<p>Scopes are fixed per client. grok-bot and claude can read and write HQ listings, pipeline, escrow, tasks, notes, the watchlist, and the investment plan, and they can publish research. instinct can only read research status and research notes. No key can run SQL, use a service-role credential, or place a trade.</p>
 ${issueForm()}`);
 }
 

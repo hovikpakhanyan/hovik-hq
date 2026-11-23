@@ -126,3 +126,18 @@ test('deal migration is fail-closed and does not seed records', () => {
   assert.equal(sql.includes('insert into public.escrows'), false);
   assert.equal(sql.includes('insert into public.tasks'), false);
 });
+
+test('hq tasks from the database replace an exported local copy without dropping legacy rows', () => {
+  const merged = HQDesk.absorbHqTasks(
+    [{ id: 'remote-1', data: { subject: 'Legacy', note: '', priority: '', completed: false } }],
+    { patches: {}, created: [{ id: 'local-1', subject: 'On device', note: '', priority: '', completed: false }, { id: 'local-2', subject: 'Stay', note: '', priority: '', completed: false }] },
+    [
+      { id: 'hq-1', external_key: 'local-1', subject: 'On device', note: '', priority: '', completed: false, completed_at: null },
+      { id: 'hq-2', external_key: 'remote-1', subject: 'Duplicate', note: '', priority: '', completed: false, completed_at: null }
+    ]
+  );
+  const subjects = Array.from(merged.items, (item) => item.subject);
+  assert.deepEqual(subjects, ['Legacy', 'On device', 'Stay']);
+  assert.equal(merged.items.find((item) => item.subject === 'On device').remote, true);
+  assert.equal(merged.store.created.some((row) => row.id === 'local-1'), false);
+});

@@ -22,6 +22,26 @@ function configProblem() {
   return null;
 }
 
+const DOMAIN_SQL = {
+  deal_rows: 'select hq_private.deal_rows($1::text, $2::text, $3::int, $4::boolean) as result',
+  deal_counts: 'select hq_private.deal_counts($1::text[]) as result',
+  deal_mutate: 'select hq_private.deal_mutate($1::text, $2::text, $3::jsonb, $4::text, $5::uuid) as result',
+  task_rows: 'select hq_private.task_rows($1::uuid, $2::int, $3::boolean) as result',
+  task_mutate: 'select hq_private.task_mutate($1::text, $2::jsonb, $3::text, $4::uuid) as result',
+  note_rows: 'select hq_private.note_rows($1::uuid, $2::int) as result',
+  note_mutate: 'select hq_private.note_mutate($1::text, $2::jsonb, $3::text, $4::uuid) as result',
+  watch_rows: 'select hq_private.watch_rows($1::uuid, $2::text, $3::text, $4::int) as result',
+  watch_mutate: 'select hq_private.watch_mutate($1::text, $2::jsonb, $3::text, $4::uuid) as result',
+  plan_read: 'select hq_private.plan_read($1::uuid) as result',
+  plan_mutate: 'select hq_private.plan_mutate($1::text, $2::jsonb, $3::text, $4::uuid) as result'
+};
+
+function domainCall(fn, args) {
+  const sql = DOMAIN_SQL[fn];
+  if (!sql) return Promise.reject(new Error('unknown domain call'));
+  return getStore().query(sql, args).then((r) => r.rows[0].result);
+}
+
 let store;
 function getStore() {
   if (!store) store = createPgStore(process.env.HQ_PUBLISHER_DATABASE_URL);
@@ -169,9 +189,14 @@ async function route(req) {
       db: {
         publish: (payload) => getStore().query('select hq_private.publish_stock_research($1::jsonb) as result', [payload]).then((r) => r.rows[0].result),
         status: (id) => getStore().query('select hq_private.research_status($1::uuid) as result', [id]).then((r) => r.rows[0].result),
-        publishDeal: (payload) => getStore().query('select hq_private.publish_deal($1::jsonb) as result', [payload]).then((r) => r.rows[0].result),
+        publishDeal: (payload, actor) => getStore().query(
+          'select hq_private.publish_deal_audited($1::jsonb, $2::text, $3::uuid) as result',
+          [payload, actor && actor.client ? actor.client : 'oauth', actor && actor.keyId ? actor.keyId : null]
+        ).then((r) => r.rows[0].result),
         readResearch: ({ limit, symbol, runId }) => getStore().query('select hq_private.read_stock_research($1::int, $2::text, $3::uuid) as result', [limit, symbol, runId]).then((r) => r.rows[0].result),
-        dealStatus: (key) => getStore().query('select hq_private.deal_status($1::text) as result', [key]).then((r) => r.rows[0].result)
+        dealStatus: (key) => getStore().query('select hq_private.deal_status($1::text) as result', [key]).then((r) => r.rows[0].result),
+        dealCounts: (kinds) => getStore().query('select hq_private.deal_counts($1::text[]) as result', [kinds]).then((r) => r.rows[0].result),
+        domain: ({ fn, args }) => domainCall(fn, args)
       },
       body: taken.raw,
       authorization: req.headers.get('authorization') || ''

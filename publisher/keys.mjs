@@ -5,21 +5,54 @@ import { createHash, randomBytes } from 'node:crypto';
 export const KEY_PREFIX = 'hqpk_';
 const KEY_PATTERN = /^hqpk_[A-Za-z0-9_-]{43}$/;
 
-export const KEY_SCOPES = ['research.publish', 'research.status.read', 'research.read'];
+// Every scope a publisher key is allowed to carry. There is no service-role
+// scope, no raw SQL scope, and no trade or order scope.
+export const KEY_SCOPES = Object.freeze([
+  'research.publish',
+  'research.status.read',
+  'research.read',
+  'listings.read',
+  'listings.write',
+  'pipeline.read',
+  'pipeline.write',
+  'escrow.read',
+  'escrow.write',
+  'tasks.read',
+  'tasks.write',
+  'notes.read',
+  'notes.write',
+  'watchlist.read',
+  'watchlist.write',
+  'plan.read',
+  'plan.write'
+]);
+
+const FULL = KEY_SCOPES;
 
 // Fixed default scopes per client. Mirrors hq_private.publisher_key_default_scopes.
+// grok-bot and claude receive the full set. instinct stays read-only on research.
 export const CLIENT_SCOPES = Object.freeze({
-  'grok-bot': Object.freeze(['research.publish', 'research.status.read']),
-  claude: Object.freeze(['research.publish', 'research.status.read', 'research.read']),
+  'grok-bot': FULL,
+  claude: FULL,
   instinct: Object.freeze(['research.status.read', 'research.read'])
 });
 
-// The only tools a key may ever call. Deal, listing, pipeline, and escrow tools
-// are never reachable with a key, whatever scopes a row carries.
-export const KEY_TOOLS = Object.freeze({
+export const RESEARCH_TOOLS = Object.freeze({
   publish_stock_research: 'research.publish',
   research_status: 'research.status.read',
   read_stock_research: 'research.read'
+});
+
+export const DEAL_WRITE = Object.freeze({
+  listing: 'listings.write',
+  pipeline: 'pipeline.write',
+  escrow: 'escrow.write'
+});
+
+export const DEAL_READ = Object.freeze({
+  listing: 'listings.read',
+  pipeline: 'pipeline.read',
+  escrow: 'escrow.read'
 });
 
 export function looksLikeKey(raw) {

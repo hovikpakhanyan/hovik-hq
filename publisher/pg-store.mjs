@@ -60,7 +60,12 @@ export function createPgStore(connectionString, options = {}) {
     async keyCheck(hash) {
       const { rows } = await pool.query('select * from hq_private.publisher_key_check($1)', [hash]);
       if (!rows.length) return null;
-      return { hash: rows[0].key_hash, client: rows[0].client, scope: Array.isArray(rows[0].scopes) ? rows[0].scopes : [] };
+      return {
+        id: rows[0].key_id,
+        hash: rows[0].key_hash,
+        client: rows[0].client,
+        scope: Array.isArray(rows[0].scopes) ? rows[0].scopes : []
+      };
     },
     async keyIssue(hash, client, label) {
       const { rows } = await pool.query('select hq_private.publisher_key_issue($1, $2, $3) as result', [hash, client, label || '']);
