@@ -325,6 +325,7 @@ button.row { width: 100%; background: none; border: 0; border-bottom: 1px solid 
 .chart-frame::after { right: 6px; bottom: 6px; border-left: 0; border-top: 0; }
 .chart-frame canvas { width: 100%; height: 100%; display: block; }
 .chart-caption { position: absolute; inset: 18px; display: grid; align-content: center; justify-items: center; text-align: center; gap: 6px; pointer-events: none; }
+.chart-caption[hidden] { display: none; }
 .chart-caption p { color: var(--text-dim); font-size: 12.5px; line-height: 1.4; }
 .hero-side { grid-column: 1 / -1; }
 .alloc-banner, .mkt-block, .hud-entry { border: 1px solid rgba(228,196,140,0.4); border-radius: 12px; background: rgba(12,10,8,0.9); padding: 10px 12px; box-shadow: 0 0 0 1px rgba(196,146,64,0.05), 0 10px 28px rgba(0,0,0,0.25); }
@@ -347,14 +348,49 @@ button.row { width: 100%; background: none; border: 0; border-bottom: 1px solid 
 .plan-doc ul { margin: 0 0 8px 18px; }
 .plan-doc strong { color: var(--text); }
 .plan-doc { min-width: 0; overflow-wrap: anywhere; }
+.plan-doc h4 { font-family: var(--disp); color: var(--gold); font-size: 13px; font-weight: 500; margin: 12px 0 6px; }
+.goal-layout { display: grid; gap: 10px; margin: 12px 0; min-width: 0; }
+.goal-card, .wealth-tips, .rules-card { min-width: 0; }
+.goal-kicker { color: var(--gold); margin: 0 0 8px; }
+.goal-stats { display: grid; grid-template-columns: 1fr; gap: 8px; margin: 8px 0; }
+.goal-stat { border: 1px solid rgba(228,196,140,0.28); border-radius: 10px; padding: 8px 10px; min-width: 0; background: rgba(8,7,5,0.35); }
+.goal-stat span { display: block; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); }
+.goal-stat strong { display: block; margin-top: 4px; font-family: var(--mono); font-size: 16px; color: #f6ecd6; overflow-wrap: anywhere; font-weight: 500; }
+.goal-stat em { display: block; margin-top: 4px; font-style: normal; font-size: 11px; letter-spacing: 0; text-transform: none; color: var(--text-muted); line-height: 1.35; }
+.goal-assumptions, .deposit-add { display: grid; gap: 8px; margin-top: 8px; min-width: 0; }
+.goal-sub { margin-top: 14px; }
+.deposit-list { display: grid; margin-top: 4px; min-width: 0; }
+.deposit-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 8px 0; border-bottom: 1px solid rgba(228,196,140,0.16); }
+.deposit-main { min-width: 0; }
+.deposit-main strong { display: block; font-size: 13px; color: var(--text); font-weight: 500; }
+.deposit-main span { color: var(--text-dim); font-size: 12.5px; overflow-wrap: anywhere; }
+.deposit-actions { display: grid; grid-template-columns: 1fr; gap: 6px; }
+.deposit-row .deposit-actions { grid-template-columns: 1fr 1fr; }
+.deposit-row .text-btn { width: 100%; }
+.goal-card .save-note { overflow-wrap: anywhere; }
+.goal-assumptions .text-btn, .deposit-add .text-btn { width: 100%; }
+.goal-path-frame { height: 150px; margin-top: 8px; }
+.field input[type="date"] { color-scheme: dark; }
+.tip-list, .rule-list { margin: 8px 0 0 18px; display: grid; gap: 8px; }
+.tip-list li, .rule-list li { color: var(--text-dim); font-size: 12.5px; line-height: 1.45; overflow-wrap: anywhere; }
+.tip-list strong, .rule-list strong { color: var(--text); }
 @media (min-width: 1001px) {
   .markets-hero { grid-template-columns: 200px minmax(280px, 1fr) minmax(200px, 280px); align-items: stretch; }
   #figure-form { grid-template-columns: 1.1fr 1fr 1fr auto; align-items: end; }
   #figure-form .field:first-child, #figure-form .text-btn { grid-column: auto; }
   .hero-side { grid-column: auto; }
   .chart-frame { height: 320px; }
+  .goal-path-frame { height: 180px; }
   .markets-sections { grid-template-columns: 1fr 1fr; }
   .markets-sections .span-2 { grid-column: 1 / -1; }
+  .goal-layout { grid-template-columns: minmax(0, 1.55fr) minmax(230px, 0.72fr); align-items: start; }
+  .goal-stats { grid-template-columns: 1fr 1fr; }
+  .goal-assumptions, .deposit-add { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; }
+  .goal-assumptions .save-note, .deposit-add .save-note { grid-column: 1 / -1; }
+  .goal-assumptions .text-btn, .deposit-add .text-btn { width: auto; }
+  .deposit-add .deposit-actions { display: flex; flex-wrap: wrap; align-items: end; }
+  .deposit-row { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+  .deposit-row .deposit-actions { display: flex; flex-wrap: wrap; }
 }
 .hq-page { position: fixed; inset: 0; z-index: 60; background: #080705; color: var(--text); display: flex; flex-direction: column; min-width: 0; max-width: 100vw; overflow: hidden; }
 .hq-page[hidden] { display: none !important; }
@@ -705,7 +741,84 @@ button.row { width: 100%; background: none; border: 0; border-bottom: 1px solid 
           Not connected to Fidelity. The chart stays empty until a manual or projected figure is entered on this device.
         </aside>
       </div>
+      <div class="goal-layout">
+        <section class="mkt-block goal-card" id="goal-card">
+          <h3>$5M goal</h3>
+          <p class="goal-kicker">Projected — illustrative, not live brokerage data</p>
+          <div class="goal-stats">
+            <div class="goal-stat"><span>Running total deposited</span><strong id="goal-deposited">No deposits logged</strong></div>
+            <div class="goal-stat"><span>Average monthly deposit</span><strong id="goal-average">No deposits logged</strong><em>From months with a logged deposit</em></div>
+            <div class="goal-stat"><span>Current balance</span><strong id="goal-balance-label">Not entered</strong></div>
+            <div class="goal-stat"><span>Years to $5M</span><strong id="goal-years">Not entered</strong></div>
+          </div>
+          <p class="save-note" id="goal-date">Enter a current balance to project a date.</p>
+          <div class="chart-frame goal-path-frame">
+            <canvas id="goal-path" width="640" height="180" aria-label="Projected path. Illustrative, not live brokerage data."></canvas>
+            <div class="chart-caption" id="goal-path-caption">
+              <p class="feed-title">No path yet</p>
+              <p>Enter a current balance to project a path. Projected — illustrative, not live brokerage data.</p>
+            </div>
+          </div>
+          <div id="goal-milestones"></div>
+          <div class="goal-assumptions">
+            <label class="field">Current balance
+              <input id="goal-balance" inputmode="decimal" placeholder="Not entered" autocomplete="off">
+            </label>
+            <label class="field">Assumed annual return
+              <input id="goal-return" inputmode="decimal" value="7" autocomplete="off">
+            </label>
+            <button type="button" class="text-btn" id="goal-assumptions-save">Save assumptions</button>
+            <p class="save-note" id="goal-note">Empty until you enter a balance. Saved on this device only. Not a brokerage value.</p>
+          </div>
+          <h3 class="goal-sub">Deposit log</h3>
+          <div class="deposit-add" id="deposit-form">
+            <label class="field">Date
+              <input id="deposit-date" type="date" autocomplete="off">
+            </label>
+            <label class="field">Amount
+              <input id="deposit-amount" inputmode="decimal" placeholder="Not entered" autocomplete="off">
+            </label>
+            <div class="deposit-actions">
+              <button type="button" class="text-btn" id="deposit-save">Add deposit</button>
+              <button type="button" class="text-btn" id="deposit-cancel" hidden>Cancel</button>
+            </div>
+            <p class="save-note" id="deposit-note">Each entry is a deposit you log. Saved on this device only.</p>
+          </div>
+          <div id="deposit-list"><p>No deposits logged.</p></div>
+        </section>
+        <aside class="mkt-block wealth-tips" id="wealth-tips">
+          <h3>Wealth tips</h3>
+          <p>A running column of practical tips on the Markets page. These are general education, not personalized tax or legal advice; confirm specifics with a tax pro.</p>
+          <ul class="tip-list">
+            <li><strong>Trade inside a retirement account when possible.</strong> In an IRA or Roth IRA, trades don't trigger yearly taxes, so active trading keeps more of its gains.</li>
+            <li><strong>Roth IRA first for long-term money.</strong> Growth and qualified withdrawals are tax-free, which matters a lot on a long path to $5M. Check the current year's contribution limit and income rules.</li>
+            <li><strong>Grab any employer 401(k) match.</strong> It's an instant return before the market does anything.</li>
+            <li><strong>Automate something, even small.</strong> A small automatic deposit keeps the habit going in lean months; add extra in big months.</li>
+            <li><strong>Reinvest dividends</strong> (VYM, VOO and others) so they compound.</li>
+            <li><strong>Keep an emergency fund outside the account</strong> (SPAXX or savings), so you never have to sell stocks at a bad time.</li>
+            <li><strong>Use losses wisely.</strong> In a taxable account, selling a loser can offset gains (tax-loss harvesting); watch the wash-sale rule.</li>
+            <li><strong>Hold winners over a year when it makes sense.</strong> Long-term gains are taxed at lower rates than short-term ones.</li>
+            <li><strong>Keep fees low.</strong> Low-cost index funds keep more money compounding.</li>
+            <li><strong>For the kids:</strong> look into 529 plans for education and a custodial Roth IRA once a child has earned income.</li>
+          </ul>
+        </aside>
+      </div>
       <div class="markets-sections">
+        <section class="mkt-block rules-card span-2">
+          <h3>Active trading rules</h3>
+          <p>The goal is to "move things around" a few times a month, not to day-trade.</p>
+          <ul class="rule-list">
+            <li><strong>Where it lives:</strong> inside the 40% upside sleeve. A suggested ceiling is about 10% of the total account for active swing trades; the rest of the 40% holds longer-term upside bets.</li>
+            <li><strong>Pace:</strong> swing trades held for days to weeks. Roughly one to four new trades a month; no daily trading quota.</li>
+            <li><strong>Every trade gets a written plan first:</strong> why, entry, profit target, and the price where it's wrong (exit). The morning scan's upside-fit alerts are the idea source.</li>
+            <li><strong>Risk per trade:</strong> keep any single trade's planned loss small, about 1% of the total account, so one bad call never dents the $5M path.</li>
+            <li><strong>No margin and no options.</strong> Leverage stays limited to what's already in TQQQ.</li>
+            <li><strong>Profits from wins</strong> can be swept into the 60% core at the quarterly check, which is how active trading feeds long-term wealth.</li>
+            <li><strong>Taxes:</strong> gains on positions held under a year are taxed as ordinary income, so frequent trading in a taxable account costs more. Trading inside a retirement account, if available, avoids that; confirm with a tax pro.</li>
+            <li><strong>Rehearse first:</strong> new setups go through paper trading before real money.</li>
+            <li><strong>Monthly review:</strong> log wins, losses, and whether each trade followed its plan. If active trading lags simply holding VOO over two quarters, shrink it.</li>
+          </ul>
+        </section>
         <section class="mkt-block" id="holdings-board">
           <h3>Holdings</h3>
           <p>No position sizes on file. Not connected to Fidelity. Nothing here is a live balance.</p>
@@ -1448,6 +1561,7 @@ function paintPages(time) {
   paintUniverse(document.getElementById('markets-field'), t);
   paintOrb(document.getElementById('markets-orb'), t);
   paintTrackingChart();
+  paintGoalPath();
 }
 function stopPageMotion() {
   if (pageRaf) cancelAnimationFrame(pageRaf);
@@ -1883,8 +1997,16 @@ function renderPlan(md) {
   const inline = (s) => esc(s).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
   lines.forEach(line => {
     if (!line.trim()) { close(); return; }
+    if (line.startsWith('### ')) { close(); html += '<h4>' + inline(line.slice(4)) + '</h4>'; return; }
     if (line.startsWith('## ')) { close(); html += '<h3>' + inline(line.slice(3)) + '</h3>'; return; }
     if (line.startsWith('# ')) { close(); html += '<h2>' + inline(line.slice(2)) + '</h2>'; return; }
+    if (line.startsWith('|')) {
+      close();
+      if (/^\|\s*-+/.test(line)) return;
+      const cells = line.split('|').slice(1, -1).map(cell => inline(cell.trim())).filter(Boolean);
+      if (cells.length) html += '<p>' + cells.join(' · ') + '</p>';
+      return;
+    }
     if (line.startsWith('- ')) {
       if (!list) { html += '<ul>'; list = true; }
       html += '<li>' + inline(line.slice(2)) + '</li>';
@@ -1895,6 +2017,329 @@ function renderPlan(md) {
   });
   close();
   return html;
+}
+let depositEditId = '';
+const GOAL_DOLLARS = 5000000;
+const GOAL_HORIZON_MONTHS = 100 * 12;
+function readGoal() {
+  const bag = readBag('goal', {});
+  const deposits = Array.isArray(bag.deposits) ? bag.deposits.filter(validDeposit) : [];
+  const balance = typeof bag.balance === 'number' && bag.balance >= 0 && bag.balance <= 1e12 ? bag.balance : null;
+  const annualReturn = typeof bag.annualReturn === 'number' && bag.annualReturn > -100 && bag.annualReturn <= 100 ? bag.annualReturn : null;
+  return { balance: balance, annualReturn: annualReturn, deposits: deposits };
+}
+function validDeposit(row) {
+  return !!(row && typeof row.id === 'string' && parseIsoDate(row.date) && typeof row.amount === 'number' && row.amount > 0 && row.amount <= 1e12);
+}
+function writeGoal(bag) {
+  localStorage.setItem(marketKey('goal'), JSON.stringify({
+    balance: bag.balance,
+    annualReturn: bag.annualReturn,
+    deposits: bag.deposits
+  }));
+}
+function parseIsoDate(value) {
+  const text = String(value || '').trim();
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+  if (!match) return '';
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (year < 1900 || year > 2200) return '';
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return '';
+  return text;
+}
+function parsePercent(raw) {
+  return parseFigure(String(raw || '').replace(/%/g, ''));
+}
+function formatLogged(n) {
+  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 });
+}
+function formatYears(months) {
+  const years = months / 12;
+  if (years < 1 / 12) return 'Under 1 month';
+  const rounded = Math.round(years * 10) / 10;
+  const text = rounded.toLocaleString('en-US', { maximumFractionDigits: 1 });
+  return text + (rounded === 1 ? ' year' : ' years');
+}
+function projectDate(months) {
+  const whole = Math.max(0, Math.ceil(months - 1e-9));
+  const now = new Date();
+  const date = new Date(now.getFullYear(), now.getMonth() + whole, 1);
+  return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+}
+function formatLoggedDate(iso) {
+  const parts = iso.split('-').map(Number);
+  const date = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+}
+function depositStats(deposits) {
+  const byMonth = new Map();
+  let total = 0;
+  deposits.forEach(row => {
+    const key = row.date.slice(0, 7);
+    byMonth.set(key, (byMonth.get(key) || 0) + row.amount);
+    total += row.amount;
+  });
+  return { total: total, months: byMonth.size, average: byMonth.size ? total / byMonth.size : null };
+}
+function futureValue(principal, pmt, rate, months) {
+  if (months <= 0) return principal;
+  if (Math.abs(rate) < 1e-10) return principal + pmt * months;
+  const growth = Math.pow(1 + rate, months);
+  return principal * growth + pmt * ((growth - 1) / rate);
+}
+function monthsToGoal(principal, pmt, annualPct) {
+  if (principal >= GOAL_DOLLARS) return 0;
+  const rate = annualPct / 100 / 12;
+  if (!(rate > -1)) return null;
+  if (Math.abs(rate) < 1e-10) {
+    if (pmt <= 0) return null;
+    const months = (GOAL_DOLLARS - principal) / pmt;
+    return months > GOAL_HORIZON_MONTHS ? Infinity : months;
+  }
+  const denom = principal + pmt / rate;
+  const numer = GOAL_DOLLARS + pmt / rate;
+  if (!((denom > 0 && numer > 0) || (denom < 0 && numer < 0))) return null;
+  const ratio = numer / denom;
+  if (!(ratio > 0) || !(1 + rate > 0)) return null;
+  const months = Math.log(ratio) / Math.log(1 + rate);
+  if (!Number.isFinite(months) || months < 0) return null;
+  return months > GOAL_HORIZON_MONTHS ? Infinity : months;
+}
+function goalRate(bag) {
+  return bag.annualReturn == null ? 7 : bag.annualReturn;
+}
+function newDepositId() {
+  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  return 'dep-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+}
+function renderMilestones(principal, pmt, annual, reached) {
+  const host = document.getElementById('goal-milestones');
+  if (!host) return;
+  if (principal == null) { host.innerHTML = ''; return; }
+  const rate = annual / 100 / 12;
+  const finite = typeof reached === 'number' && Number.isFinite(reached);
+  const marks = [];
+  if (finite && reached === 0) {
+    marks.push({ label: 'Now', value: principal });
+  } else {
+    const horizon = finite ? reached : GOAL_HORIZON_MONTHS;
+    const step = horizon <= 96 ? 12 : 60;
+    for (let month = step; month < horizon - 0.5 && marks.length < 5; month += step) {
+      marks.push({ label: formatYears(month), when: projectDate(month), value: futureValue(principal, pmt, rate, month) });
+    }
+    if (finite) marks.push({ label: formatYears(reached), when: projectDate(reached), value: GOAL_DOLLARS });
+    else marks.push({ label: '100 years', when: projectDate(GOAL_HORIZON_MONTHS), value: futureValue(principal, pmt, rate, GOAL_HORIZON_MONTHS) });
+  }
+  host.innerHTML = marks.map(mark => {
+    const when = mark.when ? ' · ' + esc(mark.when) : '';
+    return '<div class="row"><span class="label">' + esc(mark.label) + when + '</span><span class="meta">PROJECTED ' + esc(formatLogged(mark.value)) + '</span></div>';
+  }).join('');
+}
+function renderDeposits(deposits) {
+  const host = document.getElementById('deposit-list');
+  if (!host) return;
+  const rows = deposits.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : (a.id < b.id ? 1 : -1)));
+  if (!rows.length) { host.innerHTML = '<p>No deposits logged.</p>'; return; }
+  host.innerHTML = rows.map(row => (
+    '<div class="deposit-row"><div class="deposit-main"><strong>' + esc(formatLoggedDate(row.date)) + '</strong><span>' + esc(formatLogged(row.amount)) + '</span></div>' +
+    '<div class="deposit-actions"><button type="button" class="text-btn" data-deposit-edit="' + esc(row.id) + '">Edit</button>' +
+    '<button type="button" class="text-btn" data-deposit-delete="' + esc(row.id) + '">Delete</button></div></div>'
+  )).join('');
+}
+function renderGoal() {
+  const bag = readGoal();
+  const stats = depositStats(bag.deposits);
+  const annual = goalRate(bag);
+  const pmt = stats.average || 0;
+  const deposited = document.getElementById('goal-deposited');
+  const average = document.getElementById('goal-average');
+  const balanceLabel = document.getElementById('goal-balance-label');
+  const yearsEl = document.getElementById('goal-years');
+  const dateEl = document.getElementById('goal-date');
+  const balanceInput = document.getElementById('goal-balance');
+  const returnInput = document.getElementById('goal-return');
+  if (deposited) deposited.textContent = stats.months ? formatLogged(stats.total) : 'No deposits logged';
+  if (average) average.textContent = stats.average == null ? 'No deposits logged' : formatLogged(stats.average);
+  if (balanceLabel) balanceLabel.textContent = bag.balance == null ? 'Not entered' : formatLogged(bag.balance);
+  if (balanceInput && document.activeElement !== balanceInput) balanceInput.value = bag.balance == null ? '' : String(bag.balance);
+  if (returnInput && document.activeElement !== returnInput) returnInput.value = bag.annualReturn == null ? '7' : String(bag.annualReturn);
+  const note = document.getElementById('goal-note');
+  if (note) note.textContent = bag.balance == null
+    ? 'Empty until you enter a balance. Saved on this device only. Not a brokerage value.'
+    : 'Saved on this device. Projected — illustrative, not live brokerage data.';
+  let reached = null;
+  if (bag.balance == null) {
+    if (yearsEl) yearsEl.textContent = 'Not entered';
+    if (dateEl) dateEl.textContent = 'Enter a current balance to project a date.';
+  } else if (bag.balance >= GOAL_DOLLARS) {
+    reached = 0;
+    if (yearsEl) yearsEl.textContent = 'At the goal';
+    if (dateEl) dateEl.textContent = 'The entered balance is already at $5M. Projected — illustrative, not live brokerage data.';
+  } else {
+    reached = monthsToGoal(bag.balance, pmt, annual);
+    const share = Math.min(100, (bag.balance / GOAL_DOLLARS) * 100);
+    const shareText = 'Entered balance is ' + share.toLocaleString('en-US', { maximumFractionDigits: 1 }) + '% of the $5M goal. ';
+    if (reached == null) {
+      if (yearsEl) yearsEl.textContent = 'Does not reach $5M';
+      if (dateEl) dateEl.textContent = shareText + 'These inputs do not reach $5M. Projected — illustrative, not live brokerage data.';
+    } else if (!Number.isFinite(reached)) {
+      if (yearsEl) yearsEl.textContent = 'Beyond 100 years';
+      if (dateEl) dateEl.textContent = shareText + 'At these inputs the projected path stays under $5M for 100 years. Projected — illustrative, not live brokerage data.';
+    } else {
+      if (yearsEl) yearsEl.textContent = formatYears(reached);
+      if (dateEl) dateEl.textContent = shareText + projectDate(reached) + ' · assumed ' + annual + '% / yr. Projected — illustrative, not live brokerage data.';
+    }
+  }
+  renderMilestones(bag.balance, pmt, annual, bag.balance == null ? null : reached);
+  renderDeposits(bag.deposits);
+  paintGoalPath();
+}
+function saveAssumptions() {
+  const note = document.getElementById('goal-note');
+  const balance = parseFigure(document.getElementById('goal-balance').value);
+  const annual = parsePercent(document.getElementById('goal-return').value);
+  if (balance === undefined || (balance !== null && balance < 0)) {
+    if (note) note.textContent = 'Enter a current balance as a plain number, or leave it blank.';
+    return;
+  }
+  if (annual === undefined || annual === null || !(annual > -100 && annual <= 100)) {
+    if (note) note.textContent = 'Enter an assumed annual return as a percent, such as 7.';
+    return;
+  }
+  const bag = readGoal();
+  bag.balance = balance;
+  bag.annualReturn = annual;
+  writeGoal(bag);
+  if (note) note.textContent = 'Saved on this device. Projected — illustrative, not live brokerage data.';
+  renderGoal();
+}
+function resetDepositForm() {
+  depositEditId = '';
+  const date = document.getElementById('deposit-date');
+  const amount = document.getElementById('deposit-amount');
+  const save = document.getElementById('deposit-save');
+  const cancel = document.getElementById('deposit-cancel');
+  if (date) date.value = '';
+  if (amount) amount.value = '';
+  if (save) save.textContent = 'Add deposit';
+  if (cancel) cancel.hidden = true;
+}
+function saveDeposit() {
+  const note = document.getElementById('deposit-note');
+  const date = parseIsoDate(document.getElementById('deposit-date').value);
+  const amount = parseFigure(document.getElementById('deposit-amount').value);
+  if (!date) {
+    if (note) note.textContent = 'Enter the deposit date.';
+    return;
+  }
+  if (amount === undefined || amount === null || amount <= 0) {
+    if (note) note.textContent = 'Enter the deposit amount as a plain number.';
+    return;
+  }
+  const bag = readGoal();
+  if (depositEditId) {
+    const row = bag.deposits.find(item => item.id === depositEditId);
+    if (!row) { resetDepositForm(); return; }
+    row.date = date;
+    row.amount = amount;
+  } else {
+    bag.deposits.push({ id: newDepositId(), date: date, amount: amount });
+  }
+  writeGoal(bag);
+  resetDepositForm();
+  if (note) note.textContent = 'Deposit saved on this device. Not a brokerage deposit.';
+  renderGoal();
+}
+function editDeposit(id) {
+  const row = readGoal().deposits.find(item => item.id === id);
+  if (!row) return;
+  depositEditId = row.id;
+  document.getElementById('deposit-date').value = row.date;
+  document.getElementById('deposit-amount').value = String(row.amount);
+  document.getElementById('deposit-save').textContent = 'Save deposit';
+  document.getElementById('deposit-cancel').hidden = false;
+  const form = document.getElementById('deposit-form');
+  if (form && form.scrollIntoView) form.scrollIntoView({ block: 'nearest' });
+}
+function deleteDeposit(id) {
+  const bag = readGoal();
+  bag.deposits = bag.deposits.filter(item => item.id !== id);
+  writeGoal(bag);
+  if (depositEditId === id) resetDepositForm();
+  const note = document.getElementById('deposit-note');
+  if (note) note.textContent = 'Deposit removed on this device.';
+  renderGoal();
+}
+function paintGoalPath() {
+  const canvas = document.getElementById('goal-path');
+  const caption = document.getElementById('goal-path-caption');
+  if (!canvas) return;
+  fitSelf(canvas);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  const w = canvas.width;
+  const h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+  const bag = readGoal();
+  if (bag.balance == null) {
+    if (caption) caption.hidden = false;
+    return;
+  }
+  const annual = goalRate(bag);
+  const pmt = depositStats(bag.deposits).average || 0;
+  const reached = bag.balance >= GOAL_DOLLARS ? 0 : monthsToGoal(bag.balance, pmt, annual);
+  const finite = typeof reached === 'number' && Number.isFinite(reached);
+  const drawMonths = finite ? Math.max(reached, 0) : GOAL_HORIZON_MONTHS;
+  const rate = annual / 100 / 12;
+  const count = finite && reached === 0 ? 1 : Math.min(48, Math.max(2, Math.ceil(drawMonths / 12)));
+  const points = [];
+  for (let i = 0; i <= count; i++) {
+    const month = (drawMonths * i) / count;
+    points.push(finite && reached === 0 ? bag.balance : futureValue(bag.balance, pmt, rate, month));
+  }
+  if (caption) caption.hidden = true;
+  const max = Math.max.apply(null, points.concat([GOAL_DOLLARS, 1]));
+  const left = 12;
+  const right = w - 12;
+  const top = 12;
+  const bottom = h - 22;
+  ctx.strokeStyle = 'rgba(228,196,140,0.18)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let i = 1; i <= 3; i++) {
+    const y = top + ((bottom - top) * i) / 4;
+    ctx.moveTo(left, y);
+    ctx.lineTo(right, y);
+  }
+  ctx.stroke();
+  const yGoal = bottom - (GOAL_DOLLARS / max) * (bottom - top);
+  ctx.setLineDash([4, 4]);
+  ctx.strokeStyle = 'rgba(240,215,164,0.55)';
+  ctx.beginPath();
+  ctx.moveTo(left, yGoal);
+  ctx.lineTo(right, yGoal);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  points.forEach((value, i) => {
+    const x = left + ((right - left) * i) / Math.max(1, points.length - 1);
+    const y = bottom - (value / max) * (bottom - top);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = 'rgba(240,190,90,0.95)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = '#c4b49a';
+  ctx.font = '11px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('Now', left, h - 6);
+  ctx.textAlign = 'right';
+  const endLabel = !finite ? '100y' : (reached === 0 ? 'Now' : projectDate(reached));
+  ctx.fillText(endLabel, right, h - 6);
 }
 let planLoaded = false;
 async function loadPlan() {
@@ -1915,6 +2360,7 @@ function renderMarketsPage() {
   ensureFigureSelect();
   syncFigureFields();
   renderPaper();
+  renderGoal();
   paintTrackingChart();
 }
 function paintOrb(canvas, time) {
@@ -2066,6 +2512,20 @@ document.getElementById('figure-symbol').addEventListener('change', syncFigureFi
 document.getElementById('figure-save').addEventListener('click', saveFigures);
 document.getElementById('paper-balance-save').addEventListener('click', savePaperBalance);
 document.getElementById('paper-add').addEventListener('click', addPaperTrade);
+document.getElementById('goal-assumptions-save').addEventListener('click', saveAssumptions);
+document.getElementById('deposit-save').addEventListener('click', saveDeposit);
+document.getElementById('deposit-cancel').addEventListener('click', () => {
+  resetDepositForm();
+  const note = document.getElementById('deposit-note');
+  if (note) note.textContent = 'Each entry is a deposit you log. Saved on this device only.';
+});
+document.getElementById('deposit-amount').addEventListener('keydown', (e) => { if (e.key === 'Enter') saveDeposit(); });
+document.getElementById('deposit-list').addEventListener('click', (e) => {
+  const edit = e.target.closest('[data-deposit-edit]');
+  if (edit) { editDeposit(edit.getAttribute('data-deposit-edit')); return; }
+  const remove = e.target.closest('[data-deposit-delete]');
+  if (remove) deleteDeposit(remove.getAttribute('data-deposit-delete'));
+});
 document.querySelectorAll('[data-page-back]').forEach(btn => btn.addEventListener('click', closePages));
 window.addEventListener('resize', () => { if (document.body.classList.contains('page-open')) startPageMotion(); });
 document.addEventListener('visibilitychange', () => {
