@@ -10,7 +10,7 @@ export const KEY_SCOPES = ['research.publish', 'research.status.read', 'research
 // Fixed default scopes per client. Mirrors hq_private.publisher_key_default_scopes.
 export const CLIENT_SCOPES = Object.freeze({
   'grok-bot': Object.freeze(['research.publish', 'research.status.read']),
-  claude: Object.freeze(['research.status.read', 'research.read']),
+  claude: Object.freeze(['research.publish', 'research.status.read', 'research.read']),
   instinct: Object.freeze(['research.status.read', 'research.read'])
 });
 

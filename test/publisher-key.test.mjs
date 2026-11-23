@@ -53,7 +53,7 @@ test('issued keys store only the hash and carry the fixed client scopes', async 
   assert.equal(JSON.stringify(listed).includes(hashKey(issued.key)), false);
   assert.equal(JSON.stringify(listed).includes(issued.key), false);
   assert.equal((await issuer.issueKey('admin', '')).error_code, 'unknown_client');
-  assert.deepEqual(CLIENT_SCOPES.claude, ['research.status.read', 'research.read']);
+  assert.deepEqual(CLIENT_SCOPES.claude, ['research.publish', 'research.status.read', 'research.read']);
 });
 
 test('grok-bot key publishes and reads status, but never reaches deal tools', async () => {
@@ -70,21 +70,36 @@ test('grok-bot key publishes and reads status, but never reaches deal tools', as
   assert.equal((await call(issuer, key, 'read_stock_research')).status, 403);
 });
 
-test('claude and instinct keys are read-only', async () => {
+test('claude key publishes, reads status, and reads research, but never reaches deal tools', async () => {
   const { issuer } = setup();
-  for (const client of ['claude', 'instinct']) {
-    const { key } = await issuer.issueKey(client);
-    const list = await handleMcp({ auth: issuer, db, body: { jsonrpc: '2.0', id: 1, method: 'tools/list' }, authorization: 'Bearer ' + key });
-    assert.deepEqual(list.body.result.tools.map((t) => t.name), ['research_status', 'read_stock_research']);
-    assert.equal((await call(issuer, key, 'publish_stock_research', {})).status, 403);
-    assert.equal((await call(issuer, key, 'publish_deal', {})).status, 403);
-    assert.equal((await call(issuer, key, 'deal_status')).status, 403);
-    const read = await call(issuer, key, 'read_stock_research', { limit: 500, symbol: 'NVDA' });
-    assert.equal(read.status, 200);
-    assert.deepEqual(JSON.parse(read.body.result.content[0].text).q, { limit: 50, symbol: 'NVDA', runId: null });
-    const forbidden = await call(issuer, key, 'read_stock_research', { owner_id: 'x' });
-    assert.match(forbidden.body.result.content[0].text, /forbidden_field/);
-  }
+  const issued = await issuer.issueKey('claude');
+  assert.deepEqual(issued.scopes, ['research.publish', 'research.status.read', 'research.read']);
+  const list = await handleMcp({ auth: issuer, db, body: { jsonrpc: '2.0', id: 1, method: 'tools/list' }, authorization: 'Bearer ' + issued.key });
+  assert.deepEqual(list.body.result.tools.map((t) => t.name), ['publish_stock_research', 'research_status', 'read_stock_research']);
+  assert.equal((await call(issuer, issued.key, 'research_status')).status, 200);
+  const published = await call(issuer, issued.key, 'publish_stock_research', {});
+  assert.equal(published.status, 200);
+  assert.equal(published.body.result.isError, true);
+  const read = await call(issuer, issued.key, 'read_stock_research', { limit: 500, symbol: 'NVDA' });
+  assert.equal(read.status, 200);
+  assert.deepEqual(JSON.parse(read.body.result.content[0].text).q, { limit: 50, symbol: 'NVDA', runId: null });
+  const forbidden = await call(issuer, issued.key, 'read_stock_research', { owner_id: 'x' });
+  assert.match(forbidden.body.result.content[0].text, /forbidden_field/);
+  assert.equal((await call(issuer, issued.key, 'publish_deal', { kind: 'escrow' })).status, 403);
+  assert.equal((await call(issuer, issued.key, 'deal_status')).status, 403);
+});
+
+test('instinct keys are read-only', async () => {
+  const { issuer } = setup();
+  const { key } = await issuer.issueKey('instinct');
+  const list = await handleMcp({ auth: issuer, db, body: { jsonrpc: '2.0', id: 1, method: 'tools/list' }, authorization: 'Bearer ' + key });
+  assert.deepEqual(list.body.result.tools.map((t) => t.name), ['research_status', 'read_stock_research']);
+  assert.equal((await call(issuer, key, 'publish_stock_research', {})).status, 403);
+  assert.equal((await call(issuer, key, 'publish_deal', {})).status, 403);
+  assert.equal((await call(issuer, key, 'deal_status')).status, 403);
+  const read = await call(issuer, key, 'read_stock_research', { limit: 500, symbol: 'NVDA' });
+  assert.equal(read.status, 200);
+  assert.deepEqual(JSON.parse(read.body.result.content[0].text).q, { limit: 50, symbol: 'NVDA', runId: null });
 });
 
 test('revoked, expired, and unknown keys get the same 401 challenge', async () => {

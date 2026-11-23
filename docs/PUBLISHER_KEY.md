@@ -15,18 +15,20 @@ Long-lived keys are a second way to call the research publisher at `https://hq.h
 | Client | Scopes | Tools |
 | --- | --- | --- |
 | `grok-bot` | `research.publish`, `research.status.read` | `publish_stock_research`, `research_status` |
-| `claude` | `research.status.read`, `research.read` | `research_status`, `read_stock_research` |
+| `claude` | `research.publish`, `research.status.read`, `research.read` | `publish_stock_research`, `research_status`, `read_stock_research` |
 | `instinct` | `research.status.read`, `research.read` | `research_status`, `read_stock_research` |
 
 `read_stock_research` is new and read-only. It returns the bound owner's own published research notes, newest first (at most 50, optional `symbol` and `run_id` filters). It returns no watchlist, deal, listing, pipeline, or escrow data, and no owner id.
 
-No key can call `publish_deal` or `deal_status`, whatever its scopes. A table check (`publisher_keys_client_scopes`) also limits each client's scopes in the database, so no row can ever hold a deal, listing, pipeline, or escrow scope, and only `grok-bot` can hold `research.publish`. Scopes for new keys come from the database by client name, never from the caller.
+No key can call `publish_deal` or `deal_status`, whatever its scopes. A table check (`publisher_keys_client_scopes`) also limits each client's scopes in the database, so no row can ever hold a deal, listing, pipeline, or escrow scope. `grok-bot` and `claude` may hold `research.publish`; `instinct` may not. Scopes for new keys come from the database by client name, never from the caller. A key that already exists keeps the scopes stored on its row.
 
 OAuth tokens keep their two scopes and their current tool list. They do not get `read_stock_research`.
 
 ## Apply
 
 After review and the owner's approval, apply `supabase/migrations/20261122170000_publisher_keys.sql` to project `zjsvrfudkigjvvhlehdh`. It needs the research, OAuth token, and OAuth guard migrations, and does not need or touch `20261111223000_deal_publisher.sql`.
+
+Then apply `supabase/migrations/20261123053000_claude_publish_scope.sql`. It replaces `publisher_keys_client_scopes` and recreates `publisher_key_issue` (and `publisher_key_default_scopes`, which the issuer calls) so a new `claude` key receives `research.publish`, `research.status.read`, and `research.read`. `publisher_keys_scopes_known` stays as it is. Existing rows are not updated. `grok-bot` stays `research.publish` and `research.status.read`. `instinct` stays `research.status.read` and `research.read`. This migration does not touch `20261111223000_deal_publisher.sql`.
 
 `hq_publisher` gets no privileges on the key table. It can only execute `publisher_key_check`, `publisher_key_issue`, `publisher_key_list`, `publisher_key_revoke`, and `read_stock_research`. `anon` and `authenticated` cannot execute any of them.
 
@@ -85,7 +87,7 @@ The OAuth server has one static public client and no dynamic client registration
 2. In Claude's custom connector **Advanced settings**, enter the OAuth client id (the value of `HQ_OAUTH_CLIENT_ID`, currently `hq-grok-bot`) and leave the client secret empty.
 3. The consent page asks for the owner code.
 
-An OAuth grant gets `research.publish` and `research.status.read` and the full OAuth tool list, which is wider than the read-only `claude` key. Prefer the key where Claude supports a header.
+An OAuth grant gets `research.publish` and `research.status.read` and the full OAuth tool list, including `publish_deal` and `deal_status`. A new `claude` key can publish and read research, and still cannot call those deal tools. Prefer the key where Claude supports a header.
 
 ## Rollback
 
@@ -106,4 +108,4 @@ drop table if exists hq_private.publisher_keys;
 ## Tests
 
 - `node --test test/*.test.mjs` covers key format, hash-only storage, per-client scopes, deal-tool denial, revoked and expired keys, rate limits, OAuth unchanged, and the owner page headers.
-- `HQ_TEST_DATABASE_URL=… HQ_TEST_PUBLISHER_URL=… node test/publisher-keys-persist.mjs` runs against a scratch database with the four migrations applied and checks the table constraints, grants, `last_used_at`, revocation, expiry, and owner-only reads.
+- `HQ_TEST_DATABASE_URL=… HQ_TEST_PUBLISHER_URL=… node test/publisher-keys-persist.mjs` runs against a scratch database with the research, OAuth token, OAuth guard, publisher key, and claude publish-scope migrations applied (not `20261111223000_deal_publisher.sql`) and checks the table constraints, grants, `last_used_at`, revocation, expiry, and owner-only reads.
