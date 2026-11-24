@@ -5,16 +5,10 @@ import { priceChange } from '../quotes/change.mjs';
 import { cacheControl, cacheSeconds, pollIntervalMs } from '../quotes/cache.mjs';
 import { delayLabel, formatChange, formatPacific, formatPrice } from '../quotes/format.mjs';
 import { resolveMarketStatus, statusFromClock, statusLabel } from '../quotes/market.mjs';
-import { trackerSymbols, validateSymbols } from '../quotes/symbols.mjs';
+import { DEFAULT_SYMBOLS, trackerSymbols, validateSymbols } from '../quotes/symbols.mjs';
+import { acceptedQuote, currentWatchlist, nextWatchlist, saveRefusal, writeWatchlist } from '../quotes/watchlist.mjs';
 import { mapSparkPayload, sparklineCloses } from '../quotes/yahoo.mjs';
 import { createQuotesHandler } from '../netlify/functions/quotes.mjs';
-
-const tracked = [
-  { symbol: 'amd' },
-  { symbol: 'GOOGL' },
-  { symbol: 'SPCX' },
-  { symbol: 'QQQ' }
-];
 
 function spark(symbol, extra = {}) {
   return {
@@ -36,30 +30,28 @@ function spark(symbol, extra = {}) {
   };
 }
 
-test('symbols accept letters, digits, dot, and dash, and cap the list', () => {
+test('symbols accept letters, digits, and a dot, and cap the list at 25', () => {
   const parsed = validateSymbols(['amd', 'BRK.B', 'BRK-B', 'QQQ', 'bad symbol', '123', '', 'AMD', 'A'.repeat(11)]);
-  assert.deepEqual(parsed.symbols, ['AMD', 'BRK.B', 'BRK-B', 'QQQ']);
-  assert.deepEqual(parsed.rejected, ['bad symbol', '123', '(blank)', 'A'.repeat(11)]);
-  const many = validateSymbols(Array.from({ length: 16 }, (_n, i) => 'S' + String(i + 1).padStart(2, '0')));
-  assert.equal(many.symbols.length, 15);
+  assert.deepEqual(parsed.symbols, ['AMD', 'BRK.B', 'QQQ']);
+  assert.deepEqual(parsed.rejected, ['BRK-B', 'bad symbol', '123', '(blank)', 'A'.repeat(11)]);
+  const many = validateSymbols(Array.from({ length: 26 }, (_n, i) => 'S' + String(i + 1).padStart(2, '0')));
+  assert.equal(many.symbols.length, 25);
   assert.equal(many.rejected.length, 1);
 });
 
-test('the tracker follows a published watchlist and otherwise the existing default', () => {
-  const fallback = trackerSymbols({ research: { holdings: [], watch: [] }, tracked });
-  assert.deepEqual(fallback.quotes, ['AMD', 'GOOGL', 'QQQ']);
-  assert.deepEqual(fallback.unpriced, ['SPCX']);
+test('an empty watchlist falls back to the seven names, in order', () => {
+  const fallback = trackerSymbols({ research: { holdings: [], watch: [], candidates: [{ symbol: 'RGTI' }] } });
+  assert.deepEqual(fallback.quotes, ['AMD', 'GOOGL', 'NVDA', 'PNFP', 'QQQ', 'TQQQ', 'URA']);
+  assert.deepEqual(fallback.quotes, DEFAULT_SYMBOLS);
   assert.equal(fallback.source, 'default');
   const published = trackerSymbols({
     research: {
       holdings: [{ symbol: 'nvda' }, { symbol: 'AMD' }],
-      watch: [{ symbol: 'ura' }, { symbol: 'SPCX' }, { symbol: 'nope symbol' }],
+      watch: [{ symbol: 'ura' }, { symbol: 'nope symbol' }],
       candidates: [{ symbol: 'RGTI' }]
-    },
-    tracked
+    }
   });
   assert.deepEqual(published.quotes, ['NVDA', 'AMD', 'URA']);
-  assert.deepEqual(published.unpriced, ['SPCX']);
   assert.equal(published.source, 'watchlist');
 });
 
@@ -236,5 +228,105 @@ test('the markets page keeps the live board first and does not bake in a price',
   const hero = html.indexOf('class="markets-hero"', pageStart);
   assert.match(html.slice(pageStart, hero), /data-live-board/);
   assert.equal(html.includes('markets-tracker.js'), true);
+  assert.equal(html.includes('data-live-edit'), true);
   assert.equal(/\$\d{2,}/.test(html.slice(pageStart, pageStart + 8000)), false);
+  assert.match(html, /symbol: 'RGTI'/);
+  assert.match(html, /symbol: 'SPCX'/);
+});
+
+function fakeClient(results) {
+  const calls = [];
+  let step = 0;
+  function next() {
+    const result = results[Math.min(step, results.length - 1)];
+    step += 1;
+    return Promise.resolve(result);
+  }
+  function builder(op) {
+    const filters = [];
+    const chain = {
+      upsert(rows, opts) {
+        calls.push({ op, rows, opts, filters: filters.slice() });
+        return next();
+      },
+      delete() { return chain; },
+      eq(column, value) { filters.push(['eq', column, value]); return chain; },
+      not(column, operator, value) { filters.push(['not', column, operator, value]); return chain; },
+      then(resolve, reject) {
+        calls.push({ op: op + '-delete', filters: filters.slice() });
+        return next().then(resolve, reject);
+      }
+    };
+    return chain;
+  }
+  return {
+    calls,
+    from() { return builder('watchlist'); }
+  };
+}
+
+test('the editor validates, dedupes, caps, reorders, and seeds the first save from the default seven', () => {
+  assert.deepEqual(currentWatchlist([]), DEFAULT_SYMBOLS);
+  assert.deepEqual(currentWatchlist(['tqqq', 'amd', 'amd']), ['TQQQ', 'AMD']);
+  const removed = nextWatchlist([], { type: 'remove', symbol: 'ura' });
+  assert.equal(removed.ok, true);
+  assert.deepEqual(removed.symbols, ['AMD', 'GOOGL', 'NVDA', 'PNFP', 'QQQ', 'TQQQ']);
+  const added = nextWatchlist([], { type: 'add', symbol: ' brk.b ' });
+  assert.equal(added.ok, true);
+  assert.equal(added.added, 'BRK.B');
+  assert.equal(added.symbols[added.symbols.length - 1], 'BRK.B');
+  assert.equal(added.symbols.length, 8);
+  assert.equal(nextWatchlist(['AMD'], { type: 'add', symbol: 'amd' }).ok, false);
+  assert.match(nextWatchlist([], { type: 'add', symbol: 'BRK-B' }).error, /ticker/);
+  assert.match(nextWatchlist(Array.from({ length: 25 }, (_n, i) => 'S' + String(i + 1)), { type: 'add', symbol: 'ZZ' }).error, /25/);
+  assert.match(nextWatchlist(['AMD'], { type: 'remove', symbol: 'AMD' }).error, /at least one/);
+  const up = nextWatchlist(['AMD', 'GOOGL', 'NVDA'], { type: 'up', symbol: 'NVDA' });
+  assert.deepEqual(up.symbols, ['AMD', 'NVDA', 'GOOGL']);
+  const down = nextWatchlist(['AMD', 'GOOGL', 'NVDA'], { type: 'down', symbol: 'AMD' });
+  assert.deepEqual(down.symbols, ['GOOGL', 'AMD', 'NVDA']);
+  assert.deepEqual(nextWatchlist(['AMD', 'GOOGL'], { type: 'up', symbol: 'AMD' }).symbols, ['AMD', 'GOOGL']);
+  assert.equal(acceptedQuote({ quotes: [{ symbol: 'MSFT', price: 400, error: '' }] }, 'MSFT'), true);
+  assert.equal(acceptedQuote({ quotes: [{ symbol: 'MSFT', error: 'Quote unavailable' }] }, 'MSFT'), false);
+  assert.equal(acceptedQuote({ quotes: [{ symbol: 'MSFT', price: 0, error: '' }] }, 'MSFT'), false);
+});
+
+test('a refused save does not delete rows and says saving is not enabled', async () => {
+  assert.equal(saveRefusal({ code: '42501', message: 'permission denied for table watchlist' }), "Saving isn't enabled yet");
+  assert.equal(saveRefusal({ status: 401, message: 'JWT expired' }), "Saving isn't enabled yet");
+  assert.equal(saveRefusal({ message: 'network down' }), 'The watchlist could not be saved.');
+  const denied = fakeClient([{ error: { code: '42501', message: 'permission denied for table watchlist' } }]);
+  const result = await writeWatchlist(denied, ['AMD', 'GOOGL'], 'owner-1');
+  assert.equal(result.ok, false);
+  assert.equal(result.wrote, false);
+  assert.equal(result.message, "Saving isn't enabled yet");
+  assert.equal(denied.calls.length, 1);
+  assert.equal(denied.calls[0].rows[0].bucket, 'holding');
+  assert.equal(denied.calls[0].rows[0].owner_id, 'owner-1');
+  assert.equal(denied.calls[0].rows[0].sort_order, 0);
+  assert.equal(denied.calls[0].rows[1].symbol, 'GOOGL');
+  assert.equal(denied.calls[0].rows[1].sort_order, 1);
+  assert.equal(denied.calls.some((call) => String(call.op).includes('delete')), false);
+});
+
+test('a successful save rewrites holding order and then drops removed rows', async () => {
+  const client = fakeClient([{ error: null }, { error: null }, { error: null }]);
+  const result = await writeWatchlist(client, ['NVDA', 'AMD'], 'owner-1');
+  assert.equal(result.ok, true);
+  assert.equal(client.calls[0].rows.map((row) => row.symbol).join(','), 'NVDA,AMD');
+  assert.deepEqual(client.calls[1].filters[0], ['eq', 'bucket', 'holding']);
+  assert.match(client.calls[1].filters[1][3], /"NVDA","AMD"/);
+  assert.deepEqual(client.calls[2].filters[0], ['eq', 'bucket', 'watch']);
+});
+
+test('the watchlist write migration is not applied and stays owner-scoped', () => {
+  const sql = fs.readFileSync(new URL('../supabase/migrations/20261124010000_watchlist_owner_writes.sql', import.meta.url), 'utf8');
+  assert.match(sql, /NOT APPLIED/);
+  assert.match(sql, /grant insert, update, delete on table public\.watchlist to authenticated/);
+  assert.match(sql, /create policy owner_insert on public\.watchlist for insert to authenticated/);
+  assert.match(sql, /create policy owner_update on public\.watchlist for update to authenticated/);
+  assert.match(sql, /create policy owner_delete on public\.watchlist for delete to authenticated/);
+  assert.match(sql, /owner_id = auth\.uid\(\) and hq_private\.is_bound_owner\(\)/);
+  assert.match(sql, /function public\.hq_is_bound_owner\(\)/);
+  assert.equal(/to anon/.test(sql.replace(/from public, anon/g, '')), false);
+  assert.equal(sql.includes('service_role'), false);
 });

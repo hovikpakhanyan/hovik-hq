@@ -1,9 +1,7 @@
-// Symbol rules for the live watchlist. Letters, digits, dot, and dash. At most 10 characters.
-export const MAX_SYMBOLS = 15;
-export const SYMBOL_RE = /^[A-Z][A-Z0-9.-]{0,9}$/;
-
-// The markets page already treats this name as research, not a priced holding.
-export const UNPRICED = new Set(['SPCX']);
+// Matches public.watchlist.symbol. Letters, digits, and a dot. At most 10 characters.
+export const MAX_SYMBOLS = 25;
+export const SYMBOL_RE = /^[A-Z][A-Z0-9.]{0,9}$/;
+export const DEFAULT_SYMBOLS = ['AMD', 'GOOGL', 'NVDA', 'PNFP', 'QQQ', 'TQQQ', 'URA'];
 
 export function normalizeSymbol(raw) {
   const text = String(raw == null ? '' : raw).trim().toUpperCase();
@@ -38,27 +36,25 @@ function rowSymbol(row) {
   return row && row.symbol;
 }
 
-// Published Supabase rows (holding, then watch) replace the in-page default.
-// Candidates stay out of the tracker. SPCX stays on screen as unpriced.
-export function trackerSymbols({ research, tracked } = {}) {
+// Published holding and watch rows replace the seven-name default.
+// Candidates stay off the tracker.
+export function trackerSymbols({ research } = {}) {
   const state = research || {};
   const published = [].concat(state.holdings || [], state.watch || []);
   const hasPublished = published.some((row) => normalizeSymbol(rowSymbol(row)));
-  const source = hasPublished ? published : (tracked || []);
+  const source = hasPublished ? published : DEFAULT_SYMBOLS;
   const quotes = [];
-  const unpriced = [];
   const seen = new Set();
   let truncated = 0;
   for (const row of source) {
     const symbol = normalizeSymbol(rowSymbol(row));
     if (!symbol || seen.has(symbol)) continue;
     seen.add(symbol);
-    if (quotes.length + unpriced.length >= MAX_SYMBOLS) {
+    if (quotes.length >= MAX_SYMBOLS) {
       truncated += 1;
       continue;
     }
-    if (UNPRICED.has(symbol)) unpriced.push(symbol);
-    else quotes.push(symbol);
+    quotes.push(symbol);
   }
-  return { quotes, unpriced, truncated, source: hasPublished ? 'watchlist' : 'default' };
+  return { quotes, truncated, source: hasPublished ? 'watchlist' : 'default' };
 }

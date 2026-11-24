@@ -329,6 +329,14 @@ button.row { width: 100%; background: none; border: 0; border-bottom: 1px solid 
 .live-spark path { fill: none; stroke: var(--gold); stroke-width: 1.5; }
 .live-row.up .live-spark path { stroke: var(--green); }
 .live-row.down .live-spark path { stroke: var(--red); }
+.live-edit { margin-top: 8px; min-width: 0; }
+.live-edit[hidden] { display: none !important; }
+.live-add { display: grid; gap: 8px; min-width: 0; }
+.live-add .text-btn { width: 100%; }
+.live-edit-row { display: grid; gap: 6px; padding: 8px 0; border-bottom: 1px solid rgba(228,196,140,0.16); min-width: 0; }
+.live-edit-row strong { font-size: 13px; letter-spacing: 0.06em; }
+.live-edit-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.live-edit-actions .text-btn { flex: 1 1 30%; }
 .markets-hero { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 10px; align-items: start; min-width: 0; }
 #figure-form { margin: 10px 0 12px; grid-template-columns: 1fr 1fr; }
 #figure-form .field:first-child, #figure-form .text-btn, #figure-form .save-note { grid-column: 1 / -1; }
@@ -603,6 +611,16 @@ button.row { width: 100%; background: none; border: 0; border-bottom: 1px solid 
         <h5>Live</h5>
         <p class="live-session" data-live-status>Quotes load when Markets is open.</p>
         <div data-live-rows></div>
+        <div class="live-edit" data-live-edit hidden>
+          <form data-live-add>
+            <label class="field">Add symbol
+              <input data-live-input maxlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false">
+            </label>
+            <button type="submit" class="text-btn">Add</button>
+          </form>
+          <div data-live-order></div>
+          <p class="live-note" data-live-edit-note></p>
+        </div>
         <p class="live-foot">Prices only. No shares, balances, or totals.</p>
       </section>
       <div id="markets-rows" class="markets-workspace">
@@ -712,6 +730,16 @@ button.row { width: 100%; background: none; border: 0; border-bottom: 1px solid 
         <h3>Live</h3>
         <p class="live-session" data-live-status>Quotes load when Markets is open.</p>
         <div data-live-rows></div>
+        <div class="live-edit" data-live-edit hidden>
+          <form data-live-add>
+            <label class="field">Add symbol
+              <input data-live-input maxlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false">
+            </label>
+            <button type="submit" class="text-btn">Add</button>
+          </form>
+          <div data-live-order></div>
+          <p class="live-note" data-live-edit-note></p>
+        </div>
         <p class="live-foot">Prices only. No shares, balances, or totals. Not a Fidelity connection.</p>
       </section>
       <div class="markets-hero">
@@ -824,6 +852,7 @@ Object.keys(localStorage).filter(k => k.indexOf('sb-') === 0).forEach(k => local
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { storage: sessionAdapter, persistSession: true, autoRefreshToken: true }
 });
+window.sb = sb;
 
 // 30-minute inactivity logout (per-device: scope 'local' clears this tab's
 // session and best-effort revokes its refresh token server-side).
@@ -1688,7 +1717,8 @@ const TRACKED = [
 ];
 window.HQMarkets = {
   tracked() { return TRACKED; },
-  research() { return researchState; }
+  research() { return researchState; },
+  reload() { return loadResearch(); }
 };
 function marketKey(name) { return 'hq.markets.' + name + '.v1.' + (taskUser || 'device'); }
 function readBag(name, fallback) {
