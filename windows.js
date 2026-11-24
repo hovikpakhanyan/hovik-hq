@@ -67,7 +67,10 @@
     items.innerHTML = '';
     var names = Object.keys(TITLES);
     bar.hidden = wins.size === 0;
-    document.querySelector('.stage').classList.toggle('windows-open', wins.size > 0);
+    var stageEl = document.querySelector('.stage');
+    if (stageEl) stageEl.classList.toggle('windows-open', wins.size > 0);
+    var deckEl = document.getElementById('deck');
+    if (deckEl) deckEl.classList.toggle('windows-open', wins.size > 0);
     names.forEach(function (name) {
       var win = wins.get(name);
       var btn = document.createElement('button');
@@ -113,7 +116,7 @@
     var existing = wins.get(name);
     if (existing) { existing.min = false; focus(name); return existing; }
     var content = node(name);
-    if (!homes.has(content)) homes.set(content, { parent: content.parentNode, next: content.nextSibling });
+    homes.set(content, { parent: content.parentNode, next: content.nextSibling });
     var el = frame(name);
     el.querySelector('.hq-win-body').appendChild(content);
     content.classList.add('in-window');
