@@ -336,6 +336,31 @@ button.row { width: 100%; background: none; border: 0; border-bottom: 1px solid 
 .mkt-zone h5 { font-family: var(--disp); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); font-weight: 500; margin-bottom: 6px; }
 .feed-empty, .feed-empty p { color: var(--text-dim); font-size: 12.5px; line-height: 1.45; }
 .feed-title { font-family: var(--disp); color: var(--gold); letter-spacing: 0.08em; text-transform: uppercase; font-size: 12px; margin-bottom: 4px; }
+.live-board { min-width: 0; max-width: 100%; overflow-x: clip; }
+.live-session, .live-note, .live-foot { color: var(--text-dim); font-size: 12px; line-height: 1.4; }
+.live-foot, .live-note { margin-top: 6px; }
+.live-row { display: grid; grid-template-columns: minmax(0, 1fr) 76px; column-gap: 8px; align-items: center; padding: 7px 0; border-bottom: 1px solid rgba(228,196,140,0.16); min-width: 0; }
+.live-row:last-child { border-bottom: 0; }
+.live-copy { display: grid; gap: 2px; min-width: 0; }
+.live-sym { font-size: 13px; letter-spacing: 0.06em; color: var(--text); }
+.live-px { font-family: var(--mono); font-size: 13px; color: #f6ecd6; }
+.live-chg { font-family: var(--mono); font-size: 12px; color: var(--text-dim); overflow-wrap: break-word; }
+.live-row.up .live-chg { color: var(--green); }
+.live-row.down .live-chg { color: var(--red); }
+.live-meta { color: var(--text-muted); font-size: 11px; line-height: 1.35; overflow-wrap: break-word; }
+.live-error { color: var(--red); font-size: 12.5px; line-height: 1.4; }
+.live-spark { width: 72px; height: 28px; display: block; justify-self: end; }
+.live-spark path { fill: none; stroke: var(--gold); stroke-width: 1.5; }
+.live-row.up .live-spark path { stroke: var(--green); }
+.live-row.down .live-spark path { stroke: var(--red); }
+.live-edit { margin-top: 8px; min-width: 0; }
+.live-edit[hidden] { display: none !important; }
+.live-add { display: grid; gap: 8px; min-width: 0; }
+.live-add .text-btn { width: 100%; }
+.live-edit-row { display: grid; gap: 6px; padding: 8px 0; border-bottom: 1px solid rgba(228,196,140,0.16); min-width: 0; }
+.live-edit-row strong { font-size: 13px; letter-spacing: 0.06em; }
+.live-edit-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.live-edit-actions .text-btn { flex: 1 1 30%; }
 .markets-hero { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 10px; align-items: start; min-width: 0; }
 #figure-form { margin: 10px 0 12px; grid-template-columns: 1fr 1fr; }
 #figure-form .field:first-child, #figure-form .text-btn, #figure-form .save-note { grid-column: 1 / -1; }
@@ -605,6 +630,22 @@ button.row { width: 100%; background: none; border: 0; border-bottom: 1px solid 
         <div class="slot-host">
           <div class="work-panel" id="markets-panel" data-panel="markets" tabindex="-1">
             <h4><button type="button" id="open-markets-page" class="label-btn">Markets</button> <button type="button" id="open-markets-full" class="text-btn">Open full page</button> <span class="count" id="markets-count">Not connected</span></h4>
+            <section class="mkt-zone live-board" data-live-board>
+              <h5>Live</h5>
+              <p class="live-session" data-live-status>Quotes load when Markets is open.</p>
+              <div data-live-rows></div>
+              <div class="live-edit" data-live-edit hidden>
+                <form data-live-add>
+                  <label class="field">Add symbol
+                    <input data-live-input maxlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false">
+                  </label>
+                  <button type="submit" class="text-btn">Add</button>
+                </form>
+                <div data-live-order></div>
+                <p class="live-note" data-live-edit-note></p>
+              </div>
+              <p class="live-foot">Prices only. No shares, balances, or totals.</p>
+            </section>
             <div id="markets-rows" class="markets-workspace">
               <section class="mkt-zone"><h5>Holdings</h5><p class="feed-empty">No holdings published.</p></section>
               <section class="mkt-zone"><h5>News</h5><div class="feed-empty"><p class="feed-title">Feed not connected</p><p>No quotes are shown.</p></div></section>
@@ -735,6 +776,22 @@ button.row { width: 100%; background: none; border: 0; border-bottom: 1px solid 
   <div class="page-stage">
     <canvas id="markets-field" width="800" height="600" aria-hidden="true"></canvas>
     <div class="page-body">
+      <section class="mkt-block live-board" data-live-board>
+        <h3>Live</h3>
+        <p class="live-session" data-live-status>Quotes load when Markets is open.</p>
+        <div data-live-rows></div>
+        <div class="live-edit" data-live-edit hidden>
+          <form data-live-add>
+            <label class="field">Add symbol
+              <input data-live-input maxlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false">
+            </label>
+            <button type="submit" class="text-btn">Add</button>
+          </form>
+          <div data-live-order></div>
+          <p class="live-note" data-live-edit-note></p>
+        </div>
+        <p class="live-foot">Prices only. No shares, balances, or totals. Not a Fidelity connection.</p>
+      </section>
       <div class="markets-hero">
         <aside class="markets-orb-col">
           <canvas id="markets-orb" width="200" height="200" aria-hidden="true"></canvas>
@@ -846,6 +903,7 @@ Object.keys(localStorage).filter(k => k.indexOf('sb-') === 0).forEach(k => local
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { storage: sessionAdapter, persistSession: true, autoRefreshToken: true }
 });
+window.sb = sb;
 
 // 30-minute inactivity logout (per-device: scope 'local' clears this tab's
 // session and best-effort revokes its refresh token server-side).
@@ -1591,7 +1649,7 @@ function reply(raw) {
   if (q.includes('task')) return local + 'Open tasks can be completed, edited, and added. They stay on this device and, when the tasks table accepts them, in that table.';
   if (q.includes('pipeline') || q.includes('escrow')) return local + 'Pipeline and escrow are tabs in the listings window. Figures stay empty until records are stored.';
   if (q.includes('agent')) return local + 'Agents opens the command floor. Conductor, New Bot, and HQ Deployer sit at their stations. A note you send is queued on this device. It is not a live reply.';
-  if (q.includes('market') || q.includes('stock') || q.includes('research')) return local + 'Markets opens its own page. Holdings have no sizes, the chart stays empty until a manual or projected figure is entered, and weekday research stays in the stock-research chat. No Fidelity link and no quotes.';
+  if (q.includes('market') || q.includes('stock') || q.includes('research')) return local + 'Markets opens its own page. The live watchlist shows a price when the quote service answers. Holdings have no sizes, and weekday research stays in the stock-research chat. No Fidelity link.';
   return local + 'Grok Bot is not connected from this page.';
 }
 
@@ -1607,6 +1665,7 @@ function paintResearch(state) {
     body.innerHTML = window.HQResearch.renderView(state);
   }
   renderHoldingsBoard();
+  if (window.HQTracker) window.HQTracker.sync();
 }
 function openResearch() {
   const body = document.getElementById('research-body');
@@ -1722,6 +1781,11 @@ const TRACKED = [
   { symbol: 'SPAXX', note: 'Cash / core position in the plan. No size on file.' },
   { symbol: 'SPCX', note: 'Research name (SpaceX). Not a priced holding. No quote is shown.' }
 ];
+window.HQMarkets = {
+  tracked() { return TRACKED; },
+  research() { return researchState; },
+  reload() { return loadResearch(); }
+};
 function marketKey(name) { return 'hq.markets.' + name + '.v1.' + (taskUser || 'device'); }
 function readBag(name, fallback) {
   try {
@@ -2139,5 +2203,6 @@ document.addEventListener('visibilitychange', () => {
   else if (document.body.classList.contains('page-open')) startPageMotion();
 });
 </script>
+<script type="module" src="markets-tracker.js"></script>
 </body>
 </html>
