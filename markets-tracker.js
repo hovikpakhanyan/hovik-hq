@@ -31,6 +31,17 @@ function listFromPage() {
   return trackerSymbols({ research });
 }
 
+function displayed(el) {
+  let node = el;
+  while (node && node !== document.documentElement) {
+    if (node.hidden) return false;
+    const style = getComputedStyle(node);
+    if (style.display === 'none' || style.visibility === 'hidden') return false;
+    node = node.parentElement;
+  }
+  return !!el;
+}
+
 function onScreen() {
   if (document.hidden) return false;
   const app = document.getElementById('app');
@@ -44,8 +55,8 @@ function onScreen() {
   if (pop && !pop.hidden && panel && pop.contains(panel)) return true;
   if (!panel || panel.closest('.hq-win') || panel.closest('#module-host')) return false;
   const work = panel.closest('.work');
-  if (!work) return false;
-  return getComputedStyle(work).display !== 'none';
+  if (work) return getComputedStyle(work).display !== 'none';
+  return displayed(panel);
 }
 
 function sparkPath(points) {
@@ -163,7 +174,9 @@ async function refresh() {
   renderEditor();
   const visible = onScreen();
   if (!visible) {
-    if (!document.hidden) wasOn = false;
+    const panel = document.getElementById('markets-panel');
+    const held = panel && (panel.closest('#center-slot') || panel.closest('#side-bar'));
+    if (!document.hidden && !held) wasOn = false;
     stop();
     return;
   }
@@ -267,6 +280,8 @@ function boot() {
   if (page) watch.observe(page, { attributes: true, attributeFilter: ['hidden'] });
   if (pop) watch.observe(pop, { attributes: true, attributeFilter: ['hidden'] });
   if (workspace) watch.observe(workspace, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'class'] });
+  const deck = document.getElementById('deck');
+  if (deck) watch.observe(deck, { childList: true, subtree: true });
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) { stop(); return; }
     refresh();

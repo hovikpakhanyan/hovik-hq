@@ -106,7 +106,7 @@ body { overflow: hidden; }
 .login-err { color: var(--red); font-size: 12px; margin-top: 10px; min-height: 16px; }
 
 /* APP */
-.app { display: none; grid-template-columns: minmax(0, 260px) minmax(0, 1fr) minmax(0, 300px); grid-template-rows: 52px 1fr 220px; height: 100vh; gap: 1px; background: var(--border); min-width: 0; max-width: 100%; }
+.app { display: none; grid-template-columns: minmax(0, 1fr); grid-template-rows: 52px minmax(0, 1fr); height: 100vh; gap: 1px; background: var(--border); min-width: 0; max-width: 100%; overflow: hidden; }
 .app.on { display: grid; }
 .topbar { grid-column: 1 / -1; background: var(--surface); display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 18px; min-width: 0; overflow: hidden; }
 .brand { font-family: var(--disp); font-weight: 500; font-size: 14px; letter-spacing: 0.18em; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -129,7 +129,7 @@ body { overflow: hidden; }
 .stage { background: var(--bg); position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; }
 .stage::before { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse 70% 55% at 50% 46%, rgba(196,146,64,0.09), transparent 62%); pointer-events: none; z-index: 0; }
 #core-field { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
-.core { position: relative; width: min(460px, 54vh); height: min(460px, 54vh); z-index: 1; border: 0; padding: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.core { position: relative; width: min(250px, 30vh); height: min(250px, 30vh); z-index: 1; border: 0; padding: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
 .core:focus-visible { outline: 2px solid var(--cyan); outline-offset: 8px; }
 .constellation { z-index: 1; }
 .core-wave { display: none; }
@@ -191,22 +191,48 @@ button.row { width: 100%; background: none; border: 0; border-bottom: 1px solid 
 .sheet .role { font-size: 11.5px; color: var(--cyan); margin-bottom: 10px; }
 .sheet p { font-size: 12.5px; line-height: 1.5; color: var(--text-dim); margin-bottom: 10px; }
 .sheet .close { position: absolute; top: 12px; right: 14px; background: none; border: none; color: var(--text-muted); font-size: 16px; cursor: pointer; }
-.app { height: 100dvh; grid-template-rows: 52px minmax(0, 1fr) minmax(140px, 220px); }
-.topbar { grid-row: 1; }
-.agents { grid-column: 1; grid-row: 2; min-height: 0; }
-.stage { grid-column: 2; grid-row: 2; min-height: 0; min-width: 0; }
-.chat { grid-column: 3; grid-row: 2; min-height: 0; }
-.work { grid-row: 3; min-height: 0; }
-.constellation { position: relative; z-index: 1; width: min(100%, 640px); height: 100%; display: grid; place-items: center; }
+.app { height: 100dvh; grid-template-rows: 52px minmax(0, 1fr); }
+.topbar { grid-column: 1; grid-row: 1; }
+.deck {
+  grid-column: 1; grid-row: 2; min-width: 0; min-height: 0; max-width: 100%;
+  display: grid; position: relative; gap: 1px; background: var(--border); overflow: hidden;
+  grid-template-columns: minmax(0, 1fr) minmax(236px, 300px);
+  grid-template-rows: minmax(420px, 1.35fr) minmax(220px, 1fr);
+}
+.stage { grid-column: 1; grid-row: 1; min-height: 0; min-width: 0; }
+.center-slot {
+  grid-column: 1; grid-row: 2; min-width: 0; min-height: 0; display: flex; flex-direction: column;
+  background: var(--surface); box-shadow: inset 3px 0 0 rgba(228,196,140,0.72);
+}
+.side-bar {
+  grid-column: 2; grid-row: 1 / span 2; min-width: 0; min-height: 0; max-width: 100%;
+  display: flex; flex-direction: column; gap: 1px; overflow: auto; background: var(--border);
+}
+.constellation { position: relative; z-index: 1; width: min(100%, 720px); height: 100%; display: grid; place-items: center; }
 .orbit-row { display: contents; }
-.core { flex: 0 0 auto; width: min(300px, 42vh); height: min(300px, 42vh); }
+.core { flex: 0 0 auto; width: min(250px, 30vh); height: min(250px, 30vh); }
 .orbit { display: none; }
-.presence { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); width: min(420px, 92%); text-align: center; z-index: 2; }
+.presence { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); width: min(460px, 92%); max-width: calc(100% - 16px); text-align: center; z-index: 2; box-sizing: border-box; padding: 8px 12px 10px; background: rgba(8,7,5,0.84); border: 1px solid rgba(228,196,140,0.22); border-radius: 10px; }
+#center-host { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+#center-host > .chat { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+#center-host > .agents, #center-host > .work-panel { flex: 1; min-height: 0; overflow: auto; }
+.bar-slot { flex: 1 1 0; min-height: 128px; min-width: 0; display: flex; flex-direction: column; background: var(--surface); }
+.bar-swap {
+  flex: 0 0 auto; width: 100%; min-height: 44px; padding: 8px 12px; text-align: left; cursor: pointer;
+  border: 0; border-bottom: 1px solid rgba(228,196,140,0.18);
+  background: linear-gradient(90deg, rgba(196,146,64,0.16), rgba(196,146,64,0.02) 74%);
+  color: var(--gold); font-family: var(--disp); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+}
+.bar-swap:hover { background: rgba(196,146,64,0.22); }
+.bar-swap:focus-visible, [data-panel]:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
+.bar-slot .slot-host { flex: 1; min-height: 0; min-width: 0; overflow: auto; }
+.bar-slot .slot-host > .chat { display: flex; flex-direction: column; min-height: 160px; }
+.slot-host > .agents, .slot-host > .work-panel, .slot-host > .chat { min-width: 0; }
 .presence button, .orbit { min-height: 44px; }
 #presence-state { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--cyan); }
 #presence-mic, #open-research, #module-back, #research-back { background: transparent; border: 1px solid rgba(196,146,64,0.45); color: var(--cyan); border-radius: 6px; padding: 8px 12px; min-height: 44px; cursor: pointer; font: inherit; }
 #presence-note { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
-#workspace { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
+#workspace { position: absolute; inset: 0; z-index: 4; grid-column: 1 / -1; grid-row: 1 / -1; pointer-events: none; }
 .hq-win { position: absolute; display: flex; flex-direction: column; min-width: 0; min-height: 0; pointer-events: auto; background: rgba(18,16,12,0.94); border: 1px solid rgba(228,196,140,0.35); border-radius: 12px; box-shadow: 0 18px 40px rgba(0,0,0,0.45); overflow: hidden; }
 .hq-win.is-max { left: max(8px, var(--safe-left)); top: max(8px, var(--safe-top)); width: calc(100% - max(8px, var(--safe-left)) - max(8px, var(--safe-right))); height: calc(100% - max(8px, var(--safe-top)) - max(64px, calc(52px + var(--safe-bottom)))); }
 .hq-win-bar { display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 4px 6px 4px 10px; cursor: grab; background: rgba(28,24,18,0.96); touch-action: none; }
@@ -218,14 +244,19 @@ button.row { width: 100%; background: none; border: 0; border-bottom: 1px solid 
 .hq-win .chat { display: flex; flex-direction: column; min-height: 220px; }
 .float-panel { margin-left: 8px; border: 1px solid rgba(196,146,64,0.45); background: transparent; color: var(--cyan); border-radius: 6px; min-height: 28px; padding: 0 8px; font: inherit; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; }
 .hq-win .float-panel { display: none; }
-#win-dock { position: absolute; z-index: 6; left: max(8px, var(--safe-left)); right: max(8px, var(--safe-right)); bottom: max(6px, var(--safe-bottom)); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; pointer-events: auto; }
+#win-dock { position: absolute; z-index: 6; grid-column: 1 / -1; grid-row: 1 / -1; left: max(8px, var(--safe-left)); right: max(8px, var(--safe-right)); bottom: max(6px, var(--safe-bottom)); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; pointer-events: auto; }
 #win-dock[hidden] { display: none; }
 #win-dock-items { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; min-width: 0; }
 .win-chip, #win-reset { min-height: 36px; border-radius: 999px; border: 1px solid rgba(196,146,64,0.45); background: rgba(12,10,8,0.92); color: var(--gold); font: inherit; font-size: 11px; padding: 0 10px; cursor: pointer; }
+.deck.windows-open #center-host { padding-bottom: 52px; }
+@media (prefers-reduced-motion: no-preference) {
+  .slot-swap { animation: slotSwap 200ms ease; }
+}
+@keyframes slotSwap { from { opacity: 0.45; } to { opacity: 1; } }
 @media (max-width: 1000px) {
   .hq-win.is-max { height: calc(100% - max(8px, var(--safe-top)) - 140px); }
   .hq-win-resize { display: none; }
-  .stage.windows-open .constellation { padding-bottom: 96px; }
+  .deck.windows-open #center-host { padding-bottom: 108px; }
   .win-chip, #win-reset { flex: 1 1 30%; }
 }
 .module-pop { position: fixed; inset: 0; z-index: 70; background: rgba(2,6,12,0.72); display: flex; align-items: center; justify-content: center; padding: max(12px, var(--safe-top)) max(12px, var(--safe-right)) max(12px, var(--safe-bottom)) max(12px, var(--safe-left)); }
@@ -243,42 +274,35 @@ button.row { width: 100%; background: none; border: 0; border-bottom: 1px solid 
 @media (max-width: 1000px) {
   .app.on { grid-template-columns: minmax(0, 1fr); grid-template-rows: 52px minmax(0, 1fr); height: 100svh; width: 100%; overflow: hidden; }
   .brand { flex: 0 0 auto; overflow: visible; text-overflow: clip; }
-  .stage { grid-column: 1; grid-row: 2; min-width: 0; max-width: 100%; }
-  .agents, .chat, .work { display: none; }
-  .constellation {
-    width: 100%; max-width: 100%; min-width: 0; height: 100%;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-rows: auto auto auto auto auto;
-    align-content: center; justify-items: center;
-    gap: 12px 8px;
-    box-sizing: border-box;
-    padding: max(12px, var(--safe-top)) max(12px, var(--safe-right)) max(12px, var(--safe-bottom)) max(12px, var(--safe-left));
+  .deck { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; width: 100%; max-width: 100%; }
+  .stage, .center-slot, .side-bar { grid-column: 1; max-width: 100%; }
+  .stage { grid-row: 1; }
+  .center-slot { grid-row: 2; }
+  .side-bar {
+    grid-row: 3; flex-direction: row; align-items: center; gap: 8px;
+    overflow-x: auto; overflow-y: hidden;
+    padding: 8px max(8px, var(--safe-right)) max(8px, var(--safe-bottom)) max(8px, var(--safe-left));
+    background: #100e0b; scrollbar-width: thin;
   }
-  .core { grid-column: 1 / -1; grid-row: 2; width: min(228px, 60vw); height: min(228px, 60vw); }
+  .bar-slot { flex: 0 0 auto; min-height: 0; background: transparent; }
+  .bar-slot .slot-host { display: none; }
+  .bar-swap {
+    width: auto; white-space: nowrap; border: 1px solid rgba(196,146,64,0.45); border-radius: 999px;
+    background: rgba(8,14,20,0.92); color: var(--cyan);
+  }
+  .constellation { width: 100%; max-width: 100%; height: auto; min-height: 0; padding: 8px 10px 4px; box-sizing: border-box; }
+  .core { width: min(150px, 40vw); height: min(150px, 40vw); }
   .core:focus, .core:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
-  .orbit {
-    display: inline-flex; align-items: center; justify-content: center; position: static;
-    max-width: 100%; min-width: 0; min-height: 44px; padding: 8px 10px; box-sizing: border-box;
-    border-radius: 999px; border: 1px solid rgba(196,146,64,0.45); background: rgba(8,14,20,0.92);
-    color: var(--cyan); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; z-index: 3;
-  }
-  .orbit:focus, .orbit:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
-  .orbit[data-module="agents"] { grid-column: 1; grid-row: 1; justify-self: start; }
-  .orbit[data-module="chat"] { grid-column: 2; grid-row: 1; justify-self: end; }
-  .orbit[data-module="listings"] { grid-column: 1; grid-row: 3; justify-self: start; }
-  .orbit[data-module="escrows"] { grid-column: 2; grid-row: 3; justify-self: end; }
-  .orbit[data-module="tasks"] { grid-column: 1; grid-row: 4; justify-self: start; }
-  .orbit[data-module="markets"] { grid-column: 2; grid-row: 4; justify-self: end; }
-  .presence { position: static; transform: none; left: auto; width: 100%; max-width: 100%; grid-column: 1 / -1; grid-row: 5; }
+  .orbit-row, .orbit { display: none; }
+  .presence { position: static; transform: none; left: auto; width: 100%; max-width: 100%; }
+  #presence-note { overflow-wrap: anywhere; }
   #module-host .agents, #module-host .chat, #module-host .work-panel { display: block; max-height: 58dvh; overflow: auto; background: var(--surface); }
   #module-host .chat { display: flex; flex-direction: column; min-height: 280px; }
 }
 @media (max-width: 1000px) and (max-height: 520px) {
-  .constellation { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; overflow: hidden; width: 100%; max-width: 100%; padding: 8px; }
-  .core { width: min(112px, 28vh); height: min(112px, 28vh); }
-  .orbit-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; width: 100%; max-width: 100%; }
-  .orbit { position: static; }
+  .constellation { padding: 4px 8px; }
+  .core { width: min(88px, 22vh); height: min(88px, 22vh); }
+  .orbit-row, .orbit { display: none; }
   .presence { position: static; transform: none; width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -523,17 +547,14 @@ button.row { width: 100%; background: none; border: 0; border-bottom: 1px solid 
       <span id="user-email"></span>
     </div>
   </header>
-  <aside class="agents">
-    <div class="panel-label"><button type="button" id="open-agents-page" class="label-btn">Agents</button></div>
-    <div id="agent-list"></div>
-  </aside>
-  <main class="stage">
-    <canvas id="core-field" width="640" height="640" aria-hidden="true"></canvas>
+  <div class="deck" id="deck">
     <div id="workspace"></div>
     <div id="win-dock" hidden>
       <div id="win-dock-items"></div>
       <button type="button" id="win-reset">Reset layout</button>
     </div>
+    <main class="stage">
+    <canvas id="core-field" width="640" height="640" aria-hidden="true"></canvas>
     <div class="constellation" id="constellation">
       <div class="orbit-row">
       <button type="button" class="orbit" data-module="agents">Agents</button>
@@ -553,84 +574,113 @@ button.row { width: 100%; background: none; border: 0; border-bottom: 1px solid 
         <p id="presence-note">Tap the core to listen on this device. Nothing is recorded.</p>
       </div>
     </div>
-  </main>
-  <aside class="chat">
-    <div class="chat-head">Local notes <span class="you">Not connected</span></div>
-    <div class="chat-log" id="log">
-      <div class="msg ai">Grok Bot is not connected. Replies here are saved shortcuts on this page, not a live assistant.</div>
-    </div>
-    <div class="chat-bar">
-      <input id="input" placeholder="Local shortcut…" onkeydown="if(event.key==='Enter')send()">
-      <button onclick="send()">Send</button>
-    </div>
-  </aside>
-  <section class="work">
-    <div class="work-panel" id="listings-panel">
-      <h4><span id="book-heading">Listings</span> <button type="button" id="open-book-page" class="text-btn">Open full page</button> <span class="count" id="book-count">—</span></h4>
-      <div class="seg" id="book-tabs">
-        <button type="button" data-book-tab="listings" data-label="Active" aria-pressed="true">Active</button>
-        <button type="button" data-book-tab="pipeline" data-label="Pipeline" aria-pressed="false">Pipeline</button>
-        <button type="button" data-book-tab="escrows" data-label="Escrows" aria-pressed="false">Escrows</button>
-      </div>
-      <p class="save-note" id="book-note"></p>
-      <div id="book-rows"></div>
-    </div>
-    <div class="work-panel" id="tasks-panel">
-      <h4>Tasks <span class="count" id="tasks-count">—</span></h4>
-      <div class="seg" id="task-tabs">
-        <button type="button" data-task-tab="open" aria-pressed="true">Open</button>
-        <button type="button" data-task-tab="done" aria-pressed="false">Done</button>
-      </div>
-      <p class="save-note" id="task-save-note"></p>
-      <div id="tasks-rows"></div>
-      <div class="task-editor" id="task-editor" hidden>
-        <label class="field">Title <input id="task-edit-title" maxlength="180" autocomplete="off"></label>
-        <label class="field">Priority <input id="task-edit-priority" maxlength="40" list="priority-list" autocomplete="off"></label>
-        <label class="field">Details <textarea id="task-edit-note" maxlength="4000"></textarea></label>
-        <div class="task-actions">
-          <button type="button" class="text-btn" id="task-save">Save task</button>
-          <button type="button" class="text-btn" id="task-cancel">Close</button>
+    </main>
+    <section class="center-slot" id="center-slot" aria-label="Chat, center panel">
+      <div class="slot-host" id="center-host">
+        <aside class="chat" data-panel="chat" aria-current="true" tabindex="-1">
+        <div class="chat-head">Local notes <span class="you">Not connected</span></div>
+        <div class="chat-log" id="log">
+          <div class="msg ai">Grok Bot is not connected. Replies here are saved shortcuts on this page, not a live assistant.</div>
         </div>
-        <input type="hidden" id="task-edit-id" value="">
-      </div>
-      <div class="task-form" id="task-add">
-        <label class="field">New task <input id="task-add-title" maxlength="180" placeholder="Title" autocomplete="off"></label>
-        <label class="field">Priority <input id="task-add-priority" maxlength="40" list="priority-list" placeholder="Optional" autocomplete="off"></label>
-        <label class="field">Details <textarea id="task-add-note" maxlength="4000" placeholder="Optional"></textarea></label>
-        <button type="button" class="text-btn" id="task-add-btn">Add task</button>
-      </div>
-      <datalist id="priority-list">
-        <option value="High"></option>
-        <option value="Medium"></option>
-        <option value="Low"></option>
-      </datalist>
-    </div>
-    <div class="work-panel" id="markets-panel">
-      <h4><button type="button" id="open-markets-page" class="label-btn">Markets</button> <button type="button" id="open-markets-full" class="text-btn">Open full page</button> <span class="count" id="markets-count">Not connected</span></h4>
-      <section class="mkt-zone live-board" data-live-board>
-        <h5>Live</h5>
-        <p class="live-session" data-live-status>Quotes load when Markets is open.</p>
-        <div data-live-rows></div>
-        <div class="live-edit" data-live-edit hidden>
-          <form data-live-add>
-            <label class="field">Add symbol
-              <input data-live-input maxlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false">
-            </label>
-            <button type="submit" class="text-btn">Add</button>
-          </form>
-          <div data-live-order></div>
-          <p class="live-note" data-live-edit-note></p>
+        <div class="chat-bar">
+          <input id="input" placeholder="Local shortcut…" onkeydown="if(event.key==='Enter')send()">
+          <button onclick="send()">Send</button>
         </div>
-        <p class="live-foot">Prices only. No shares, balances, or totals.</p>
-      </section>
-      <div id="markets-rows" class="markets-workspace">
-        <section class="mkt-zone"><h5>Holdings</h5><p class="feed-empty">No holdings published.</p></section>
-        <section class="mkt-zone"><h5>News</h5><div class="feed-empty"><p class="feed-title">Feed not connected</p><p>No quotes are shown.</p></div></section>
-        <section class="mkt-zone"><h5>Advice / research</h5><p class="feed-empty">No research notes yet.</p></section>
+        </aside>
       </div>
-      <button type="button" id="open-research">Open research</button>
-    </div>
-  </section>
+    </section>
+    <nav class="side-bar" id="side-bar" aria-label="Panels">
+      <div class="bar-slot">
+        <button type="button" class="bar-swap" data-swap="tasks">Tasks</button>
+        <div class="slot-host">
+          <div class="work-panel" id="tasks-panel" data-panel="tasks" tabindex="-1">
+            <h4>Tasks <span class="count" id="tasks-count">—</span></h4>
+            <div class="seg" id="task-tabs">
+              <button type="button" data-task-tab="open" aria-pressed="true">Open</button>
+              <button type="button" data-task-tab="done" aria-pressed="false">Done</button>
+            </div>
+            <p class="save-note" id="task-save-note"></p>
+            <div id="tasks-rows"></div>
+            <div class="task-editor" id="task-editor" hidden>
+              <label class="field">Title <input id="task-edit-title" maxlength="180" autocomplete="off"></label>
+              <label class="field">Priority <input id="task-edit-priority" maxlength="40" list="priority-list" autocomplete="off"></label>
+              <label class="field">Details <textarea id="task-edit-note" maxlength="4000"></textarea></label>
+              <div class="task-actions">
+                <button type="button" class="text-btn" id="task-save">Save task</button>
+                <button type="button" class="text-btn" id="task-cancel">Close</button>
+              </div>
+              <input type="hidden" id="task-edit-id" value="">
+            </div>
+            <div class="task-form" id="task-add">
+              <label class="field">New task <input id="task-add-title" maxlength="180" placeholder="Title" autocomplete="off"></label>
+              <label class="field">Priority <input id="task-add-priority" maxlength="40" list="priority-list" placeholder="Optional" autocomplete="off"></label>
+              <label class="field">Details <textarea id="task-add-note" maxlength="4000" placeholder="Optional"></textarea></label>
+              <button type="button" class="text-btn" id="task-add-btn">Add task</button>
+            </div>
+            <datalist id="priority-list">
+              <option value="High"></option>
+              <option value="Medium"></option>
+              <option value="Low"></option>
+            </datalist>
+          </div>
+        </div>
+      </div>
+      <div class="bar-slot">
+        <button type="button" class="bar-swap" data-swap="markets">Markets</button>
+        <div class="slot-host">
+          <div class="work-panel" id="markets-panel" data-panel="markets" tabindex="-1">
+            <h4><button type="button" id="open-markets-page" class="label-btn">Markets</button> <button type="button" id="open-markets-full" class="text-btn">Open full page</button> <span class="count" id="markets-count">Not connected</span></h4>
+            <section class="mkt-zone live-board" data-live-board>
+              <h5>Live</h5>
+              <p class="live-session" data-live-status>Quotes load when Markets is open.</p>
+              <div data-live-rows></div>
+              <div class="live-edit" data-live-edit hidden>
+                <form data-live-add>
+                  <label class="field">Add symbol
+                    <input data-live-input maxlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false">
+                  </label>
+                  <button type="submit" class="text-btn">Add</button>
+                </form>
+                <div data-live-order></div>
+                <p class="live-note" data-live-edit-note></p>
+              </div>
+              <p class="live-foot">Prices only. No shares, balances, or totals.</p>
+            </section>
+            <div id="markets-rows" class="markets-workspace">
+              <section class="mkt-zone"><h5>Holdings</h5><p class="feed-empty">No holdings published.</p></section>
+              <section class="mkt-zone"><h5>News</h5><div class="feed-empty"><p class="feed-title">Feed not connected</p><p>No quotes are shown.</p></div></section>
+              <section class="mkt-zone"><h5>Advice / research</h5><p class="feed-empty">No research notes yet.</p></section>
+            </div>
+            <button type="button" id="open-research">Open research</button>
+          </div>
+        </div>
+      </div>
+      <div class="bar-slot">
+        <button type="button" class="bar-swap" data-swap="listings">Listings</button>
+        <div class="slot-host">
+          <div class="work-panel" id="listings-panel" data-panel="listings" tabindex="-1">
+            <h4><span id="book-heading">Listings</span> <button type="button" id="open-book-page" class="text-btn">Open full page</button> <span class="count" id="book-count">—</span></h4>
+            <div class="seg" id="book-tabs">
+              <button type="button" data-book-tab="listings" data-label="Active" aria-pressed="true">Active</button>
+              <button type="button" data-book-tab="pipeline" data-label="Pipeline" aria-pressed="false">Pipeline</button>
+              <button type="button" data-book-tab="escrows" data-label="Escrows" aria-pressed="false">Escrows</button>
+            </div>
+            <p class="save-note" id="book-note"></p>
+            <div id="book-rows"></div>
+          </div>
+        </div>
+      </div>
+      <div class="bar-slot">
+        <button type="button" class="bar-swap" data-swap="agents">Agents</button>
+        <div class="slot-host">
+          <aside class="agents" data-panel="agents" tabindex="-1">
+          <div class="panel-label"><button type="button" id="open-agents-page" class="label-btn">Agents</button></div>
+          <div id="agent-list"></div>
+          </aside>
+        </div>
+      </div>
+    </nav>
+  </div>
 </div>
 
 <div class="overlay" id="overlay" onclick="if(event.target===this)closeSheet()">
@@ -832,6 +882,7 @@ button.row { width: 100%; background: none; border: 0; border-bottom: 1px solid 
 <script src="research-ui.js"></script>
 <script src="desk.js"></script>
 <script src="presence.js"></script>
+<script src="arrange.js"></script>
 <script src="windows.js"></script>
 
 <script>
@@ -1560,12 +1611,27 @@ function openMarketsPage() {
 }
 
 // ── Chat ──
+let coreSpeakTimer = 0;
+function reactCore() {
+  const core = document.getElementById('command-core');
+  if (!core) return;
+  clearTimeout(coreSpeakTimer);
+  core.classList.remove('speaking');
+  void core.offsetWidth;
+  core.classList.add('speaking');
+  if (window.HQPresence && window.HQPresence.setAssistantEnergy) window.HQPresence.setAssistantEnergy(1);
+  coreSpeakTimer = setTimeout(() => {
+    core.classList.remove('speaking');
+    if (window.HQPresence && window.HQPresence.setAssistantEnergy) window.HQPresence.setAssistantEnergy(0);
+  }, 1200);
+}
 function send() {
   const el = document.getElementById('input');
   const text = el.value.trim();
   if (!text) return;
   el.value = '';
   addMsg(text, 'user');
+  reactCore();
   setTimeout(() => addMsg(reply(text), 'ai'), 280);
 }
 function addMsg(html, who) {
